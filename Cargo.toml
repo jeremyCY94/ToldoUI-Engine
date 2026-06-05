@@ -1,0 +1,17 @@
+[package]
+name = "toldo-ui-engine"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+html5ever = "0.29"
+markup5ever = "0.14"
+cssparser = "0.34"
+taffy = "0.7"
+euclid = "0.22"
+winit = "0.30.0"
+softbuffer = "0.4.0"
+raqote = "0.8"
+rusttype = "0.9"
+font-kit = "0.14"
+unicode-width = "0.2"

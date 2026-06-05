@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MiniServo Demo</title>
+</head>
+<body>
+  <header id="header">
+    <h1>MiniServo Engine</h1>
+    <p>Minimal HTML/CSS rendering engine con FlexBox completo</p>
+  </header>
+
+  <nav class="navbar">
+    <a href="#" class="nav-item">Inicio</a>
+    <a href="#" class="nav-item">FlexBox</a>
+    <a href="#" class="nav-item">CSS</a>
+    <a href="#" class="nav-item">HTML</a>
+  </nav>
+
+  <main class="container">
+    <section class="card">
+      <h2>FlexBox Row</h2>
+      <div class="flex-row">
+        <div class="box box-1">1</div>
+        <div class="box box-2">2</div>
+        <div class="box box-3">3</div>
+        <div class="box box-4">4</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>FlexBox Column</h2>
+      <div class="flex-column">
+        <div class="box box-1">A</div>
+        <div class="box box-2">B</div>
+        <div class="box box-3">C</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Justify Content</h2>
+      <div class="flex-row justify-center">
+        <div class="box box-1 small">Centro</div>
+        <div class="box box-2 small">Centro</div>
+        <div class="box box-3 small">Centro</div>
+      </div>
+      <div class="flex-row justify-between">
+        <div class="box box-1 small">Between</div>
+        <div class="box box-2 small">Between</div>
+        <div class="box box-3 small">Between</div>
+      </div>
+      <div class="flex-row justify-around">
+        <div class="box box-3 small">Around</div>
+        <div class="box box-4 small">Around</div>
+        <div class="box box-1 small">Around</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Align Items</h2>
+      <div class="flex-row align-stretch" style="height: 120px;">
+        <div class="box box-1 small">Stretch</div>
+        <div class="box box-2 medium">Stretch</div>
+        <div class="box box-3 small">Stretch</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Flex Grow</h2>
+      <div class="flex-row">
+        <div class="box box-1 grow-1">grow:1</div>
+        <div class="box box-2 grow-2">grow:2</div>
+        <div class="box box-3 grow-1">grow:1</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Flex Wrap</h2>
+      <div class="flex-row flex-wrap">
+        <div class="box wrap-item">Wrap</div>
+        <div class="box wrap-item">Wrap</div>
+        <div class="box wrap-item">Wrap</div>
+        <div class="box wrap-item">Wrap</div>
+        <div class="box wrap-item">Wrap</div>
+        <div class="box wrap-item">Wrap</div>
+        <div class="box wrap-item">Wrap</div>
+        <div class="box wrap-item">Wrap</div>
+        <div class="box wrap-item">Wrap</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Order</h2>
+      <div class="flex-row">
+        <div class="box order-3">order:3</div>
+        <div class="box order-1">order:1</div>
+        <div class="box order-2">order:2</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Gap</h2>
+      <div class="flex-row with-gap">
+        <div class="box small">gap</div>
+        <div class="box small">gap</div>
+        <div class="box small">gap</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Estilos de Texto</h2>
+      <p style="color: #e74c3c;">Texto en color rojo</p>
+      <p style="font-size: 24px;">Texto grande (24px)</p>
+      <p style="font-weight: bold;">Texto en negrita</p>
+      <p style="text-align: center;">Texto centrado</p>
+      <p style="background-color: #f1c40f; padding: 8px;">Texto con fondo amarillo</p>
+    </section>
+
+    <section class="card">
+      <h2>Bordes</h2>
+      <div class="flex-row flex-wrap" style="gap: 16px;">
+        <div style="border: 2px solid #e74c3c; padding: 12px;">Borde sólido</div>
+        <div style="border: 3px dashed #3498db; padding: 12px;">Borde dashed</div>
+        <div style="border: 3px dotted #2ecc71; padding: 12px;">Borde dotted</div>
+        <div style="border: 4px double #9b59b6; padding: 12px;">Borde double</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Formulario</h2>
+      <form>
+        <label>Nombre</label>
+        <input type="text" placeholder="Tu nombre" value="">
+
+        <label>Correo</label>
+        <input type="text" placeholder="correo@ejemplo.com" value="juan@ejemplo.com">
+
+        <label>País</label>
+        <select>
+          <option>Argentina</option>
+          <option>Chile</option>
+          <option selected>México</option>
+          <option>Perú</option>
+          <option>Uruguay</option>
+        </select>
+
+        <label>Preferencia</label>
+        <div class="radio-group">
+          <label class="radio-label"><input type="radio"> Visual</label>
+          <label class="radio-label"><input type="radio" checked> Técnico</label>
+          <label class="radio-label"><input type="radio"> Mixto</label>
+        </div>
+
+        <label>Suscripción</label>
+        <label class="checkbox-label"><input type="checkbox" checked> Recibir newsletter</label>
+
+        <label>Mensaje</label>
+        <textarea>Escribe tu mensaje aquí</textarea>
+
+        <button>Enviar</button>
+      </form>
+    </section>
+
+  </main>
+
+  <footer id="footer">
+    <p>MiniServo 2026 — HTML + CSS con FlexBox completo</p>
+    <p style="font-size: 12px;">Flechas / scroll para navegar  R para recargar</p>
+  </footer>
+</body>
+</html>
