@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use crate::css::Stylesheet;
 use crate::dom::{self, Node, NodeType};
-use super::types::{Position, Length, BorderSide, BorderStyle, BorderLineStyle, BoxSizing, Color, TextAlign};
+use super::types::{Position, Length, BorderSide, BorderStyle, BorderLineStyle, BoxSizing, Color, TextAlign, LinearGradient, GradientStop};
 use super::computed::ComputedStyle;
 
 pub type StyleMap = HashMap<*const Node, ComputedStyle>;
@@ -109,7 +109,26 @@ fn apply_prop(style: &mut ComputedStyle, prop: &str, value: &str) {
         "overflow" => { let p:Vec<&str>=v.split_whitespace().collect(); let o=parse_overflow(p.first().copied().unwrap_or("visible")); style.overflow_x=o; style.overflow_y=p.get(1).map(|&s|parse_overflow(s)).unwrap_or(o); }
         "overflow-x" => style.overflow_x = parse_overflow(v),
         "overflow-y" => style.overflow_y = parse_overflow(v),
-        "background" | "background-color" => { if let Some(c)=parse_color(v){style.background_color=c;} }
+        "background" => {
+            if v.starts_with("linear-gradient") {
+                if let Some(grad) = parse_linear_gradient(v) {
+                    style.background_gradient = Some(grad);
+                }
+            } else if let Some(c) = parse_color(v) {
+                style.background_color = c;
+                style.background_gradient = None;
+            }
+        }
+        "background-image" => {
+            if let Some(grad) = parse_linear_gradient(v) {
+                style.background_gradient = Some(grad);
+            }
+        }
+        "background-color" => {
+            if let Some(c) = parse_color(v) {
+                style.background_color = c;
+            }
+        }
         "color" => { if let Some(c)=parse_color(v){style.color=c;} }
         "font-size" => style.font_size = parse_font_size(v, style.font_size),
         "font-family" => style.font_family = v.split(',').next().unwrap_or("sans-serif").trim().trim_matches('"').trim_matches('\'').to_string(),
@@ -320,4 +339,150 @@ fn parse_single_border(v:&str)->Option<BorderSide>{
     let mut w=0.0;let mut c=Color::black();let mut s=BorderLineStyle::None;
     for p in parts{if let Some(cl)=parse_color(p){c=cl;}else{match p{"none"=>s=BorderLineStyle::None,"solid"=>s=BorderLineStyle::Solid,"dashed"=>s=BorderLineStyle::Dashed,"dotted"=>s=BorderLineStyle::Dotted,"double"=>s=BorderLineStyle::Double,_=>{w=parse_border_width(p);}}}}
     Some(BorderSide{width:w,style:s,color:c})
+}
+
+pub fn parse_linear_gradient(v: &str) -> Option<LinearGradient> {
+    let v = v.trim();
+    if !v.starts_with("linear-gradient(") || !v.ends_with(')') {
+        return None;
+    }
+    let content = v.strip_prefix("linear-gradient(").unwrap().strip_suffix(')').unwrap().trim();
+    let parts = split_commas_top_level(content);
+    if parts.is_empty() { return None; }
+
+    let mut start_idx = 0;
+    let mut angle = 180.0; // por defecto 'to bottom'
+
+    if let Some(parsed_angle) = parse_angle(&parts[0]) {
+        angle = parsed_angle;
+        start_idx = 1;
+    }
+
+    let mut raw_stops = Vec::new();
+    for part in &parts[start_idx..] {
+        if let Some(stop) = parse_color_stop(part) {
+            raw_stops.push(stop);
+        } else {
+            return None;
+        }
+    }
+
+    if raw_stops.len() < 2 {
+        return None;
+    }
+
+    let stops = distribute_stops(raw_stops);
+    Some(LinearGradient { angle, stops })
+}
+
+fn split_commas_top_level(s: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0;
+    for c in s.chars() {
+        if c == '(' {
+            depth += 1;
+            current.push(c);
+        } else if c == ')' {
+            if depth > 0 {
+                depth -= 1;
+            }
+            current.push(c);
+        } else if c == ',' && depth == 0 {
+            parts.push(current.trim().to_string());
+            current = String::new();
+        } else {
+            current.push(c);
+        }
+    }
+    if !current.trim().is_empty() {
+        parts.push(current.trim().to_string());
+    }
+    parts
+}
+
+fn parse_angle(s: &str) -> Option<f32> {
+    let s = s.trim().to_lowercase();
+    if s.ends_with("deg") {
+        if let Ok(val) = s.trim_end_matches("deg").trim().parse::<f32>() {
+            return Some(val);
+        }
+    }
+    if s.starts_with("to ") {
+        let dir = s.strip_prefix("to ").unwrap().trim();
+        return Some(match dir {
+            "top" => 0.0,
+            "right" => 90.0,
+            "bottom" => 180.0,
+            "left" => 270.0,
+            "top right" | "right top" => 45.0,
+            "bottom right" | "right bottom" => 135.0,
+            "bottom left" | "left bottom" => 225.0,
+            "top left" | "left top" => 315.0,
+            _ => 180.0,
+        });
+    }
+    None
+}
+
+fn parse_color_stop(s: &str) -> Option<(Color, Option<f32>)> {
+    let s = s.trim();
+    let parts: Vec<&str> = s.split_whitespace().collect();
+    if parts.is_empty() { return None; }
+    let last = parts.last().unwrap();
+    if last.ends_with('%') {
+        if let Ok(pct) = last.trim_end_matches('%').parse::<f32>() {
+            let color_str = s.trim_end_matches(last).trim();
+            if let Some(color) = parse_color(color_str) {
+                return Some((color, Some(pct / 100.0)));
+            }
+        }
+    }
+    if let Some(color) = parse_color(s) {
+        return Some((color, None));
+    }
+    None
+}
+
+fn distribute_stops(mut stops: Vec<(Color, Option<f32>)>) -> Vec<GradientStop> {
+    if stops.is_empty() { return Vec::new(); }
+    if stops.len() == 1 {
+        return vec![GradientStop {
+            position: 0.0,
+            color: stops[0].0,
+        }];
+    }
+
+    if stops[0].1.is_none() {
+        stops[0].1 = Some(0.0);
+    }
+    let last_idx = stops.len() - 1;
+    if stops[last_idx].1.is_none() {
+        stops[last_idx].1 = Some(1.0);
+    }
+
+    let mut i = 0;
+    while i < stops.len() {
+        if stops[i].1.is_none() {
+            let mut j = i + 1;
+            while j < stops.len() && stops[j].1.is_none() {
+                j += 1;
+            }
+            let start_val = stops[i - 1].1.unwrap();
+            let end_val = stops[j].1.unwrap();
+            let count = (j - i + 1) as f32;
+            let step = (end_val - start_val) / count;
+            for k in i..j {
+                stops[k].1 = Some(start_val + step * (k - i + 1) as f32);
+            }
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+
+    stops.into_iter().map(|(color, pos)| GradientStop {
+        position: pos.unwrap_or(0.0),
+        color,
+    }).collect()
 }

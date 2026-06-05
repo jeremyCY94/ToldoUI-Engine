@@ -1,4 +1,4 @@
-use super::types::{Position, Length, BorderStyle, BoxSizing, Color, TextAlign};
+use super::types::{Position, Length, BorderStyle, BoxSizing, Color, TextAlign, LinearGradient};
 
 #[derive(Debug, Clone)]
 pub struct ComputedStyle {
@@ -16,7 +16,7 @@ pub struct ComputedStyle {
     pub align_content: Option<taffy::AlignContent>,
     pub gap_row: Length, pub gap_column: Length,
     pub overflow_x: taffy::Overflow, pub overflow_y: taffy::Overflow,
-    pub background_color: Color, pub color: Color,
+    pub background_color: Color, pub background_gradient: Option<LinearGradient>, pub color: Color,
     pub font_size: f32, pub font_family: String, pub font_weight: u16,
     pub text_align: TextAlign, pub line_height: Length,
     pub top: Length, pub right: Length, pub bottom: Length, pub left: Length,
@@ -37,7 +37,7 @@ impl Default for ComputedStyle {
             justify_content: None, align_items: None, align_self: None, align_content: None,
             gap_row: Length::Px(0.0), gap_column: Length::Px(0.0),
             overflow_x: taffy::Overflow::Visible, overflow_y: taffy::Overflow::Visible,
-            background_color: Color::transparent(), color: Color::black(),
+            background_color: Color::transparent(), background_gradient: None, color: Color::black(),
             font_size: 16.0, font_family: "sans-serif".to_string(), font_weight: 400,
             text_align: TextAlign::Center, line_height: Length::Px(1.2),
             top: Length::Auto, right: Length::Auto, bottom: Length::Auto, left: Length::Auto,

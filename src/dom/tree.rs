@@ -36,6 +36,12 @@ impl DomTree {
     pub fn iter(&self) -> DomIterator {
         DomIterator::new(self.document.clone())
     }
+
+    pub fn title(&self) -> Option<String> {
+        self.iter()
+            .find(|n| n.tag_name() == Some("title"))
+            .map(|n| n.children_text())
+    }
 }
 
 #[allow(dead_code)]

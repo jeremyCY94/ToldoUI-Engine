@@ -322,7 +322,30 @@ impl Node {
 }
 
 fn bg(dt: &mut DrawTarget, s: &ComputedStyle, x: f32, y: f32, w: f32, h: f32) {
-    if s.background_color.a > 0 && w > 0.0 && h > 0.0 {
+    if w <= 0.0 || h <= 0.0 {
+        return;
+    }
+    if let Some(grad) = &s.background_gradient {
+        let angle_rad = grad.angle.to_radians();
+        let dx = angle_rad.sin();
+        let dy = -angle_rad.cos();
+        let len = (w * dx.abs()) + (h * dy.abs());
+        let cx = x + w / 2.0;
+        let cy = y + h / 2.0;
+        let start_p = Point::new(cx - dx * len / 2.0, cy - dy * len / 2.0);
+        let end_p = Point::new(cx + dx * len / 2.0, cy + dy * len / 2.0);
+
+        let mut raqote_stops = Vec::new();
+        for stop in &grad.stops {
+            raqote_stops.push(raqote::GradientStop {
+                position: stop.position,
+                color: raqote::Color::new(stop.color.a, stop.color.r, stop.color.g, stop.color.b),
+            });
+        }
+        let gradient = raqote::Gradient { stops: raqote_stops };
+        let src = Source::new_linear_gradient(gradient, start_p, end_p, Spread::Pad);
+        dt.fill_rect(x, y, w, h, &src, &DrawOptions::new());
+    } else if s.background_color.a > 0 {
         let src = SolidSource::from_unpremultiplied_argb(s.background_color.a, s.background_color.r, s.background_color.g, s.background_color.b);
         dt.fill_rect(x, y, w, h, &Source::Solid(src), &DrawOptions::new());
     }

@@ -58,3 +58,16 @@ pub struct BorderStyle {
 impl Default for BorderStyle {
     fn default() -> Self { BorderStyle { top: BorderSide::none(), right: BorderSide::none(), bottom: BorderSide::none(), left: BorderSide::none() } }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GradientStop {
+    pub position: f32,
+    pub color: Color,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LinearGradient {
+    pub angle: f32,
+    pub stops: Vec<GradientStop>,
+}
+

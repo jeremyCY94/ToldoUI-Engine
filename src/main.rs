@@ -38,10 +38,11 @@ struct App {
     last_click_pos: (f32, f32),
     click_count: u32,
     caret_on: bool,
+    default_title: String,
 }
 
 impl App {
-    fn new() -> Self {
+    fn new(default_title: &str) -> Self {
         App {
             window: None, ctx: None, surface: None,
             dom: None, styles: StyleMap::new(),
@@ -55,6 +56,7 @@ impl App {
             last_click_pos: (0.0, 0.0),
             click_count: 0,
             caret_on: true,
+            default_title: default_title.to_string(),
         }
     }
 
@@ -67,6 +69,16 @@ impl App {
         self.form = form::FormState::new();
         populate_form(&dom, &mut self.form);
         self.dom = Some(dom);
+        self.update_title();
+    }
+
+    fn update_title(&self) {
+        if let Some(ref window) = self.window {
+            let title = self.dom.as_ref()
+                .and_then(|d| d.title())
+                .unwrap_or_else(|| self.default_title.clone());
+            window.set_title(&title);
+        }
     }
 
     fn draw(&mut self) {
@@ -118,7 +130,7 @@ impl App {
 impl ApplicationHandler for App {
     fn resumed(&mut self, el: &ActiveEventLoop) {
         let wa = Window::default_attributes()
-            .with_title("MiniServo — HTML/CSS + FlexBox")
+            .with_title(&self.default_title)
             .with_inner_size(LogicalSize::new(W as f64, H as f64));
         let window = el.create_window(wa).unwrap();
         let window = Rc::new(window);
@@ -382,5 +394,5 @@ impl App {
 
 fn main() {
     let el = EventLoop::new().unwrap();
-    el.run_app(&mut App::new()).unwrap();
+    el.run_app(&mut App::new("ToldoUI-Engine")).unwrap();
 }
