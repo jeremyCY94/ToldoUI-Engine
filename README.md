@@ -1,7 +1,7 @@
 
 > [!WARNING]
 > **ToldoUI-Engine** se encuentra actualmente en su fase **Beta 0.0.1 (totalmente inicial)**. 
-> El proyecto puede sufrir cambios drásticos, contener errores o experimentar inestabilidad. Se recomienda usarlo con precaución y a menera de aprendisaje.
+> El proyecto puede sufrir cambios drásticos, contener errores o experimentar inestabilidad. Se recomienda usarlo con precaución y a manera de aprendisaje.
 
 
 ## 🛠️ Instalación y Requisitos
