@@ -6,7 +6,10 @@ A lightweight, high-performance HTML/CSS rendering engine written in Rust for na
 
 https://github.com/user-attachments/assets/4ca9c3d1-b8da-4f31-a0f8-d753cfc2feb9
 
-ToldoUI-Engine es un motor de interfaz gráfica (GUI) de próxima generación desarrollado en Rust. Está diseñado como una alternativa ultra-ligera, segura y eficiente a frameworks pesados como Electron, permitiendo a los desarrolladores construir aplicaciones de escritorio nativas utilizando tecnologías web estándar (HTML5 y CSS3).
+ToldoUI-Engine es un motor de interfaz gráfica (GUI) de próxima generación desarrollado en Rust. Está diseñado como una alternativa ultra-ligera, segura y eficiente a frameworks pesados como Electron, permitiendo a los desarrolladores construir aplicaciones de escritorio nativas utilizando tecnologías web estándar (HTML5 y CSS3) con ejecutables pesando menos de 10Mb.
+
+<img width="803" height="217" alt="imagen" src="https://github.com/user-attachments/assets/65394371-d918-49d4-8c85-46202d729175" />
+
 
 Inspirado en la arquitectura modular de Servo y el manejo de ventanas nativo de Winit, ToldoUI-Engine actúa como un "toldo" estructural: una capa ligera y resistente que procesa el Layout web y lo renderiza con el máximo rendimiento del hardware, sin la sobrecarga de memoria de un navegador Chromium completo.
 ✨ Características Principales (Features)
