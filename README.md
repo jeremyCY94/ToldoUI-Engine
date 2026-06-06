@@ -4,6 +4,53 @@
 > El proyecto puede sufrir cambios drásticos, contener errores o experimentar inestabilidad. Se recomienda usarlo con precaución y a menera de aprendisaje.
 
 
+## 🛠️ Instalación y Requisitos
+
+### Prerrequisitos
+
+Para compilar y ejecutar ToldoUI-Engine necesitas tener instalado el compilador de Rust. Si no lo tienes, puedes instalarlo usando [rustup](https://rustup.rs/):
+
+```bash
+# En sistemas basados en Unix (macOS y Linux)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+En **Windows**, descarga y ejecuta el instalador oficial desde [rustup.rs](https://rustup.rs/).
+
+#### Dependencias del Sistema (Solo Linux)
+Si estás desarrollando en Linux, asegúrate de tener instaladas las librerías necesarias de desarrollo para Winit y Font-Kit. Por ejemplo, en Ubuntu/Debian:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y libx11-dev libxft-dev libxmu-dev libdbus-1-dev libfontconfig1-dev
+```
+
+### Clonar e Instalar
+
+Clona el repositorio en tu máquina local:
+
+```bash
+git clone https://github.com/jeremyCY94/ToldoUI-Engine.git
+cd ToldoUI-Engine
+```
+
+Compila el proyecto para comprobar que todo está configurado correctamente:
+
+```bash
+cargo build
+```
+
+---
+
+## 🚀 Ejecución
+
+Para iniciar el navegador de demostración que carga el HTML y CSS ubicados en el directorio `examples/`, simplemente ejecuta:
+
+```bash
+cargo run
+```
+
+
 ToldoUI-Engine
 A lightweight, high-performance HTML/CSS rendering engine written in Rust for native desktop applications.
 
