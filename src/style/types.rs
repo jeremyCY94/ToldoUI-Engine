@@ -71,3 +71,24 @@ pub struct LinearGradient {
     pub stops: Vec<GradientStop>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Cursor {
+    Auto,
+    Default,
+    Pointer,
+    Text,
+    Wait,
+    Help,
+    NotAllowed,
+    Progress,
+    Grab,
+    Grabbing,
+    Move,
+    ZoomIn,
+    ZoomOut,
+}
+
+impl Default for Cursor {
+    fn default() -> Self { Cursor::Auto }
+}
+

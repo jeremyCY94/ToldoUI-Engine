@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use crate::css::Stylesheet;
 use crate::dom::{self, Node, NodeType};
-use super::types::{Position, Length, BorderSide, BorderStyle, BorderLineStyle, BoxSizing, Color, TextAlign, LinearGradient, GradientStop};
+use super::types::{Position, Length, BorderSide, BorderStyle, BorderLineStyle, BoxSizing, Color, TextAlign, LinearGradient, GradientStop, Cursor};
 use super::computed::ComputedStyle;
 
 pub type StyleMap = HashMap<*const Node, ComputedStyle>;
@@ -137,6 +137,23 @@ fn apply_prop(style: &mut ComputedStyle, prop: &str, value: &str) {
         "line-height" => { style.line_height = if v=="normal"{Length::Px(style.font_size*1.2)}else{parse_len(v)}; }
         "opacity" => style.opacity = parse_f32(v).max(0.0).min(1.0),
         "visibility" => style.visibility = v != "hidden" && v != "collapse",
+        "cursor" => {
+            style.cursor = match v.to_lowercase().as_str() {
+                "default" => Cursor::Default,
+                "pointer" => Cursor::Pointer,
+                "text" => Cursor::Text,
+                "wait" => Cursor::Wait,
+                "help" => Cursor::Help,
+                "not-allowed" => Cursor::NotAllowed,
+                "progress" => Cursor::Progress,
+                "grab" => Cursor::Grab,
+                "grabbing" => Cursor::Grabbing,
+                "move" => Cursor::Move,
+                "zoom-in" => Cursor::ZoomIn,
+                "zoom-out" => Cursor::ZoomOut,
+                _ => Cursor::Auto,
+            };
+        }
         "position" => { style.position = match v { "relative"=>Position::Relative,"absolute"=>Position::Absolute,"fixed"=>Position::Fixed,"sticky"=>Position::Sticky,_=>Position::Static }; }
         "top" => style.top = parse_len(v), "right" => style.right = parse_len(v),
         "bottom" => style.bottom = parse_len(v), "left" => style.left = parse_len(v),

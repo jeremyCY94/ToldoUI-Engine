@@ -16,6 +16,7 @@ body {
   color: white;
   padding: 40px 20px;
   text-align: center;
+  cursor: help;
 }
 
 #header h1 {
@@ -68,7 +69,7 @@ body {
   background: white;
   border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .card h2 {
@@ -130,12 +131,24 @@ body {
   color: white;
   font-weight: bold;
   font-size: 16px;
+  cursor: pointer;
 }
 
-.box-1 { background-color: #3498db; }
-.box-2 { background-color: #e74c3c; }
-.box-3 { background-color: #2ecc71; }
-.box-4 { background-color: #f39c12; }
+.box-1 {
+  background-color: #3498db;
+}
+
+.box-2 {
+  background-color: #e74c3c;
+}
+
+.box-3 {
+  background-color: #2ecc71;
+}
+
+.box-4 {
+  background-color: #f39c12;
+}
 
 .small {
   min-width: 80px;
@@ -149,8 +162,13 @@ body {
   font-size: 14px;
 }
 
-.grow-1 { flex-grow: 1; }
-.grow-2 { flex-grow: 2; }
+.grow-1 {
+  flex-grow: 1;
+}
+
+.grow-2 {
+  flex-grow: 2;
+}
 
 .wrap-item {
   min-width: 100px;
@@ -164,9 +182,20 @@ body {
   font-weight: bold;
 }
 
-.order-1 { order: 1; background-color: #1abc9c; }
-.order-2 { order: 2; background-color: #e67e22; }
-.order-3 { order: 3; background-color: #e74c3c; }
+.order-1 {
+  order: 1;
+  background-color: #1abc9c;
+}
+
+.order-2 {
+  order: 2;
+  background-color: #e67e22;
+}
+
+.order-3 {
+  order: 3;
+  background-color: #e74c3c;
+}
 
 form {
   display: flex;
@@ -180,7 +209,10 @@ form label {
   color: #555;
 }
 
-input, select, textarea, button {
+input,
+select,
+textarea,
+button {
   padding: 10px 12px;
   border: 2px solid #ddd;
   border-radius: 6px;
@@ -204,7 +236,8 @@ button {
   gap: 16px;
 }
 
-.radio-label, .checkbox-label {
+.radio-label,
+.checkbox-label {
   display: flex;
   flex-direction: row;
   align-items: center;

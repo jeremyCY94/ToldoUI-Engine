@@ -7,7 +7,7 @@ use winit::dpi::LogicalSize;
 use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
-use winit::window::{Window, WindowId};
+use winit::window::{Window, WindowId, CursorIcon};
 
 use raqote::*;
 
@@ -39,6 +39,7 @@ struct App {
     click_count: u32,
     caret_on: bool,
     default_title: String,
+    current_cursor: CursorIcon,
 }
 
 impl App {
@@ -57,6 +58,7 @@ impl App {
             click_count: 0,
             caret_on: true,
             default_title: default_title.to_string(),
+            current_cursor: CursorIcon::Default,
         }
     }
 
@@ -78,6 +80,57 @@ impl App {
                 .and_then(|d| d.title())
                 .unwrap_or_else(|| self.default_title.clone());
             window.set_title(&title);
+        }
+    }
+
+    fn update_cursor_icon(&mut self) {
+        let hit = self.hit_test(self.mouse_x, self.mouse_y + self.scroll_y);
+        let needed_cursor = match hit {
+            Some((node, form_type)) => {
+                let css_cursor = self.styles.get(&dom::node_ptr(&node))
+                    .map(|style| style.cursor)
+                    .unwrap_or(style::Cursor::Auto);
+
+                match css_cursor {
+                    style::Cursor::Default => CursorIcon::Default,
+                    style::Cursor::Pointer => CursorIcon::Pointer,
+                    style::Cursor::Text => CursorIcon::Text,
+                    style::Cursor::Wait => CursorIcon::Wait,
+                    style::Cursor::Help => CursorIcon::Help,
+                    style::Cursor::NotAllowed => CursorIcon::NotAllowed,
+                    style::Cursor::Progress => CursorIcon::Progress,
+                    style::Cursor::Grab => CursorIcon::Grab,
+                    style::Cursor::Grabbing => CursorIcon::Grabbing,
+                    style::Cursor::Move => CursorIcon::Move,
+                    style::Cursor::ZoomIn => CursorIcon::ZoomIn,
+                    style::Cursor::ZoomOut => CursorIcon::ZoomOut,
+                    style::Cursor::Auto => match form_type {
+                        "text" | "textarea" => CursorIcon::Text,
+                        "button" | "select" | "link" | "checkbox" | "radio" => CursorIcon::Pointer,
+                        _ => CursorIcon::Default,
+                    }
+                }
+            }
+            None => {
+                let win = match &self.window { Some(w) => w.clone(), None => return };
+                let size = win.inner_size();
+                let ww = size.width.max(100) as f32;
+                let wh = size.height.max(100) as f32;
+                let sb_w = 10.0;
+                let sb_x = ww - sb_w - 2.0;
+                if self.mouse_x >= sb_x && self.mouse_x < sb_x + sb_w && self.mouse_y >= 2.0 && self.mouse_y < wh - 2.0 {
+                    CursorIcon::Pointer
+                } else {
+                    CursorIcon::Default
+                }
+            }
+        };
+
+        if self.current_cursor != needed_cursor {
+            if let Some(ref window) = self.window {
+                window.set_cursor(needed_cursor);
+            }
+            self.current_cursor = needed_cursor;
         }
     }
 
@@ -213,11 +266,13 @@ impl ApplicationHandler for App {
             WindowEvent::MouseWheel { delta: MouseScrollDelta::LineDelta(_, y), .. } => {
                 self.scroll_y = (self.scroll_y - y * 20.0).max(0.0);
                 self.dragging_scrollbar = false;
+                self.update_cursor_icon();
                 if let Some(w) = &self.window { w.request_redraw(); }
             }
             WindowEvent::MouseWheel { delta: MouseScrollDelta::PixelDelta(pos), .. } => {
                 self.scroll_y = (self.scroll_y - pos.y as f32).max(0.0);
                 self.dragging_scrollbar = false;
+                self.update_cursor_icon();
                 if let Some(w) = &self.window { w.request_redraw(); }
             }
             WindowEvent::MouseInput { state, button: MouseButton::Left, .. } => {
@@ -248,12 +303,16 @@ impl ApplicationHandler for App {
                             match form_type {
                                 "checkbox" => { self.form.toggle(&key); self.form.focus(None); self.click_count = 0; }
                                 "radio" => { self.form.toggle(&key); self.form.focus(None); self.click_count = 0; }
-                                _ => {
+                                "text" | "textarea" => {
                                     self.form.focus(Some(key.clone()));
                                     if self.click_count >= 2 { self.form.select_all(&key); }
                                     let val = self.form.get_value(&key);
                                     self.form.set_cursor(&key, val.len());
                                     self.caret_on = true;
+                                }
+                                _ => {
+                                    self.form.focus(None);
+                                    self.click_count = 0;
                                 }
                             }
                             if let Some(w) = &self.window { w.request_redraw(); }
@@ -279,6 +338,7 @@ impl ApplicationHandler for App {
                         self.dragging_scrollbar = false;
                     }
                 }
+                self.update_cursor_icon();
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.mouse_x = position.x as f32;
@@ -296,6 +356,7 @@ impl ApplicationHandler for App {
                     self.scroll_y = (ratio * max_scroll).clamp(0.0, max_scroll);
                     if let Some(w) = &self.window { w.request_redraw(); }
                 }
+                self.update_cursor_icon();
             }
             _ => {}
         }
@@ -360,22 +421,24 @@ impl App {
                     let y = py + lr.location.y;
                     let w = lr.size.width;
                     let h = lr.size.height;
-                    // Always traverse into <html> even if the point is outside its viewport rect
+
                     if mx >= x && mx < x + w && my >= y && my < y + h || node.tag_name() == Some("html") {
-                        let itype = node.get_attribute("type").unwrap_or("");
-                        let form_type = match node.tag_name().unwrap_or("") {
-                            "input" => match itype { "checkbox" => "checkbox", "radio" => "radio", _ => "text" },
-                            "button" => "button", "select" => "select", "textarea" => "textarea",
-                            _ => "",
-                        };
-                        if !form_type.is_empty() {
-                            return Some((node.clone(), form_type));
-                        }
+                        // 1. Probar en los hijos primero
                         for child in &node.children {
                             if let Some(hit) = self.hit_test_node(child, mx, my, x, y) {
                                 return Some(hit);
                             }
                         }
+
+                        // 2. Si ningún hijo hace hit, el elemento actual es el hit
+                        let itype = node.get_attribute("type").unwrap_or("");
+                        let form_type = match node.tag_name().unwrap_or("") {
+                            "input" => match itype { "checkbox" => "checkbox", "radio" => "radio", _ => "text" },
+                            "button" => "button", "select" => "select", "textarea" => "textarea",
+                            "a" => "link",
+                            _ => "generic",
+                        };
+                        return Some((node.clone(), form_type));
                     }
                 }
                 None
