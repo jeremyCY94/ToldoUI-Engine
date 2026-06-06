@@ -1,7 +1,10 @@
 
+> [!WARNING]
+> **ToldoUI-Engine** se encuentra actualmente en su fase **Beta 0.0.1 (totalmente inicial)**. 
+> El proyecto puede sufrir cambios drásticos, contener errores o experimentar inestabilidad. Se recomienda usarlo con precaución y a menera de aprendisaje.
+
 
 ToldoUI-Engine
-
 A lightweight, high-performance HTML/CSS rendering engine written in Rust for native desktop applications.
 
 https://github.com/user-attachments/assets/4ca9c3d1-b8da-4f31-a0f8-d753cfc2feb9
