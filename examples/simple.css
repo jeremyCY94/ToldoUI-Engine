@@ -212,23 +212,8 @@ form label {
 input,
 select,
 textarea,
-button {
-  padding: 10px 12px;
-  border: 2px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
-  background: white;
-  color: #333;
-}
 
-button {
-  background: #667eea;
-  color: white;
-  font-weight: bold;
-  border: none;
-  cursor: pointer;
-  text-align: center;
-}
+
 
 .radio-group {
   display: flex;

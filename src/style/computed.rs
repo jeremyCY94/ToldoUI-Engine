@@ -22,6 +22,7 @@ pub struct ComputedStyle {
     pub text_align: TextAlign, pub line_height: Length,
     pub top: Length, pub right: Length, pub bottom: Length, pub left: Length,
     pub opacity: f32, pub visibility: bool,
+    pub border_radius: Length,
 }
 
 impl Default for ComputedStyle {
@@ -44,6 +45,7 @@ impl Default for ComputedStyle {
             text_align: TextAlign::Center, line_height: Length::Px(1.2),
             top: Length::Auto, right: Length::Auto, bottom: Length::Auto, left: Length::Auto,
             opacity: 1.0, visibility: true,
+            border_radius: Length::Px(0.0),
         }
     }
 }

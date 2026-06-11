@@ -132,20 +132,17 @@ impl Painter {
                             }
                         }
                         "button" | "select" => {
-                            let cx = x + lp(&style.padding_left) + style.border.left.width;
-                            let cy = y + lp(&style.padding_top) + style.border.top.width;
                             for child in &node.children {
                                 let cptr = dom::node_ptr(child);
                                 if let Some(text) = child.text() {
                                     if !text.trim().is_empty() {
                                         if let Some(clr) = layout.get(cptr) {
-                                            let tx = cx + clr.location.x;
-                                            let ty = cy + clr.location.y;
+                                            // Las coordenadas del layout (clr.location) ya contemplan el padding
+                                            // y los bordes calculados por Taffy para alinear/centrar los hijos flexbox.
+                                            let tx = x + clr.location.x;
+                                            let ty = y + clr.location.y;
                                             let aw = clr.size.width.max(1.0);
-                                            let ch = h - lp(&style.padding_top) - lp(&style.padding_bottom) - style.border.top.width - style.border.bottom.width;
-                                            let lh = style.font_size * 1.4;
-                                            let vy = if ch > lh { ty + (ch - lh) * 0.5 } else { ty };
-                                            self.render_text(dt, &style, &text, tx, vy, aw);
+                                            self.render_text(dt, &style, &text, tx, ty, aw);
                                         }
                                     }
                                 }
@@ -325,39 +322,119 @@ fn bg(dt: &mut DrawTarget, s: &ComputedStyle, x: f32, y: f32, w: f32, h: f32) {
     if w <= 0.0 || h <= 0.0 {
         return;
     }
-    if let Some(grad) = &s.background_gradient {
-        let angle_rad = grad.angle.to_radians();
-        let dx = angle_rad.sin();
-        let dy = -angle_rad.cos();
-        let len = (w * dx.abs()) + (h * dy.abs());
-        let cx = x + w / 2.0;
-        let cy = y + h / 2.0;
-        let start_p = Point::new(cx - dx * len / 2.0, cy - dy * len / 2.0);
-        let end_p = Point::new(cx + dx * len / 2.0, cy + dy * len / 2.0);
+    let r = lp(&s.border_radius).min(w * 0.5).min(h * 0.5);
 
-        let mut raqote_stops = Vec::new();
-        for stop in &grad.stops {
-            raqote_stops.push(raqote::GradientStop {
-                position: stop.position,
-                color: raqote::Color::new(stop.color.a, stop.color.r, stop.color.g, stop.color.b),
-            });
+    if r > 0.0 {
+        let mut pb = PathBuilder::new();
+        pb.move_to(x + r, y);
+        pb.line_to(x + w - r, y);
+        pb.quad_to(x + w, y, x + w, y + r);
+        pb.line_to(x + w, y + h - r);
+        pb.quad_to(x + w, y + h, x + w - r, y + h);
+        pb.line_to(x + r, y + h);
+        pb.quad_to(x, y + h, x, y + h - r);
+        pb.line_to(x, y + r);
+        pb.quad_to(x, y, x + r, y);
+        pb.close();
+        let path = pb.finish();
+
+        if let Some(grad) = &s.background_gradient {
+            let angle_rad = grad.angle.to_radians();
+            let dx = angle_rad.sin();
+            let dy = -angle_rad.cos();
+            let len = (w * dx.abs()) + (h * dy.abs());
+            let cx = x + w / 2.0;
+            let cy = y + h / 2.0;
+            let start_p = Point::new(cx - dx * len / 2.0, cy - dy * len / 2.0);
+            let end_p = Point::new(cx + dx * len / 2.0, cy + dy * len / 2.0);
+
+            let mut raqote_stops = Vec::new();
+            for stop in &grad.stops {
+                raqote_stops.push(raqote::GradientStop {
+                    position: stop.position,
+                    color: raqote::Color::new(stop.color.a, stop.color.r, stop.color.g, stop.color.b),
+                });
+            }
+            let gradient = raqote::Gradient { stops: raqote_stops };
+            let src = Source::new_linear_gradient(gradient, start_p, end_p, Spread::Pad);
+            dt.fill(&path, &src, &DrawOptions::new());
+        } else if s.background_color.a > 0 {
+            let src = SolidSource::from_unpremultiplied_argb(s.background_color.a, s.background_color.r, s.background_color.g, s.background_color.b);
+            dt.fill(&path, &Source::Solid(src), &DrawOptions::new());
         }
-        let gradient = raqote::Gradient { stops: raqote_stops };
-        let src = Source::new_linear_gradient(gradient, start_p, end_p, Spread::Pad);
-        dt.fill_rect(x, y, w, h, &src, &DrawOptions::new());
-    } else if s.background_color.a > 0 {
-        let src = SolidSource::from_unpremultiplied_argb(s.background_color.a, s.background_color.r, s.background_color.g, s.background_color.b);
-        dt.fill_rect(x, y, w, h, &Source::Solid(src), &DrawOptions::new());
+    } else {
+        if let Some(grad) = &s.background_gradient {
+            let angle_rad = grad.angle.to_radians();
+            let dx = angle_rad.sin();
+            let dy = -angle_rad.cos();
+            let len = (w * dx.abs()) + (h * dy.abs());
+            let cx = x + w / 2.0;
+            let cy = y + h / 2.0;
+            let start_p = Point::new(cx - dx * len / 2.0, cy - dy * len / 2.0);
+            let end_p = Point::new(cx + dx * len / 2.0, cy + dy * len / 2.0);
+
+            let mut raqote_stops = Vec::new();
+            for stop in &grad.stops {
+                raqote_stops.push(raqote::GradientStop {
+                    position: stop.position,
+                    color: raqote::Color::new(stop.color.a, stop.color.r, stop.color.g, stop.color.b),
+                });
+            }
+            let gradient = raqote::Gradient { stops: raqote_stops };
+            let src = Source::new_linear_gradient(gradient, start_p, end_p, Spread::Pad);
+            dt.fill_rect(x, y, w, h, &src, &DrawOptions::new());
+        } else if s.background_color.a > 0 {
+            let src = SolidSource::from_unpremultiplied_argb(s.background_color.a, s.background_color.r, s.background_color.g, s.background_color.b);
+            dt.fill_rect(x, y, w, h, &Source::Solid(src), &DrawOptions::new());
+        }
     }
 }
 
 fn border(dt: &mut DrawTarget, s: &ComputedStyle, x: f32, y: f32, w: f32, h: f32) {
     let opts = DrawOptions::new();
     let b = &s.border;
-    stroke_edge(dt, &b.top, x, y, w, b.top.width, true, &opts);
-    stroke_edge(dt, &b.bottom, x, y + h - b.bottom.width, w, b.bottom.width, true, &opts);
-    stroke_edge(dt, &b.left, x, y, b.left.width, h, false, &opts);
-    stroke_edge(dt, &b.right, x + w - b.right.width, y, b.right.width, h, false, &opts);
+    let r = lp(&s.border_radius).min(w * 0.5).min(h * 0.5);
+
+    if r > 0.0 {
+        let bw = b.top.width;
+        if bw <= 0.0 { return; }
+
+        let half_bw = bw * 0.5;
+        let bx = x + half_bw;
+        let by = y + half_bw;
+        let bw_inner = w - bw;
+        let bh_inner = h - bw;
+        let br = (r - half_bw).max(0.0);
+
+        let mut pb = PathBuilder::new();
+        pb.move_to(bx + br, by);
+        pb.line_to(bx + bw_inner - br, by);
+        pb.quad_to(bx + bw_inner, by, bx + bw_inner, by + br);
+        pb.line_to(bx + bw_inner, by + bh_inner - br);
+        pb.quad_to(bx + bw_inner, by + bh_inner, bx + bw_inner - br, by + bh_inner);
+        pb.line_to(bx + br, by + bh_inner);
+        pb.quad_to(bx, by + bh_inner, bx, by + bh_inner - br);
+        pb.line_to(bx, by + br);
+        pb.quad_to(bx, by, bx + br, by);
+        pb.close();
+        let path = pb.finish();
+
+        let sc = SolidSource::from_unpremultiplied_argb(b.top.color.a, b.top.color.r, b.top.color.g, b.top.color.b);
+        let stroke_style = StrokeStyle {
+            width: bw,
+            cap: LineCap::Butt,
+            join: LineJoin::Miter,
+            miter_limit: 10.0,
+            dash_array: Vec::new(),
+            dash_offset: 0.0,
+        };
+        dt.stroke(&path, &Source::Solid(sc), &stroke_style, &opts);
+    } else {
+        stroke_edge(dt, &b.top, x, y, w, b.top.width, true, &opts);
+        stroke_edge(dt, &b.bottom, x, y + h - b.bottom.width, w, b.bottom.width, true, &opts);
+        stroke_edge(dt, &b.left, x, y, b.left.width, h, false, &opts);
+        stroke_edge(dt, &b.right, x + w - b.right.width, y, b.right.width, h, false, &opts);
+    }
 }
 
 fn stroke_edge(dt: &mut DrawTarget, side: &BorderSide, x: f32, y: f32, w: f32, h: f32, horizontal: bool, opts: &DrawOptions) {

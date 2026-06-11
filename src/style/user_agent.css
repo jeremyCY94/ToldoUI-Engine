@@ -1,0 +1,176 @@
+html,
+body,
+div,
+section,
+header,
+footer,
+nav,
+main,
+article,
+aside,
+figure,
+figcaption,
+details,
+summary,
+form,
+fieldset,
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+blockquote,
+pre,
+hr,
+table,
+ul,
+ol,
+li,
+a,
+span,
+em,
+strong,
+i,
+b,
+u,
+s,
+small,
+sub,
+sup,
+code,
+label,
+button,
+input,
+textarea,
+select,
+option,
+img,
+picture,
+br,
+mark,
+ins,
+del {
+    display: block;
+}
+
+head,
+meta,
+link,
+script,
+style,
+title,
+noscript {
+    display: none;
+}
+
+h1 {
+    font-size: 32px;
+}
+
+h2 {
+    font-size: 28px;
+}
+
+h3 {
+    font-size: 24px;
+}
+
+h4 {
+    font-size: 20px;
+}
+
+h5 {
+    font-size: 16px;
+}
+
+h6 {
+    font-size: 14px;
+}
+
+small {
+    font-size: 0.8em;
+}
+
+pre,
+code {
+    font-family: monospace;
+}
+
+strong,
+b,
+th {
+    font-weight: 700;
+}
+
+em,
+i {
+    font-weight: 500;
+}
+
+a {
+    color: #0000ee;
+}
+
+body {
+    margin: 8px;
+}
+
+ul,
+ol {
+    margin-top: 16px;
+    margin-bottom: 16px;
+    padding-left: 40px;
+}
+
+p {
+    margin-top: 16px;
+    margin-bottom: 16px;
+}
+
+input {
+    display: block;
+    min-height: 36px;
+}
+
+button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: 700;
+    min-height: 20px;
+    background-color: rgb(235, 235, 235);
+    color: rgb(41, 41, 41);
+    border: 1px solid rgba(0, 0, 0, 0.171);
+    border-radius: 3px;
+}
+
+select {
+    display: block;
+    min-height: 36px;
+}
+
+textarea {
+    display: block;
+    min-height: 36px;
+}
+
+label {
+    display: block;
+}
+
+option {
+    display: block;
+}
+
+blockquote {
+    margin-top: 16px;
+    margin-bottom: 16px;
+    margin-left: 40px;
+    margin-right: 40px;
+}
+
+hr {
+    border-top: 1px solid #808080;
+}

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::OnceLock;
 
 use crate::css::Stylesheet;
 use crate::dom::{self, Node, NodeType};
@@ -7,6 +8,15 @@ use super::types::{Position, Length, BorderSide, BorderStyle, BorderLineStyle, B
 use super::computed::ComputedStyle;
 
 pub type StyleMap = HashMap<*const Node, ComputedStyle>;
+
+static USER_AGENT_STYLESHEET: OnceLock<Stylesheet> = OnceLock::new();
+
+fn get_user_agent_stylesheet() -> &'static Stylesheet {
+    USER_AGENT_STYLESHEET.get_or_init(|| {
+        let css = include_str!("user_agent.css");
+        Stylesheet::parse(css)
+    })
+}
 
 pub fn resolve_styles(stylesheet: &Stylesheet, root: Rc<Node>) -> StyleMap {
     let mut map = StyleMap::new();
@@ -21,6 +31,24 @@ fn resolve_node(ss: &Stylesheet, node: &Rc<Node>, parent: &ComputedStyle, map: &
             let mut s = ComputedStyle::default();
             s.inherit(parent);
 
+            // 1. Estilos por defecto del User Agent
+            let ua_matched = get_user_agent_stylesheet().match_rules(node);
+            for (d, _) in ua_matched {
+                apply_decls(&mut s, d);
+            }
+
+            // 2. Estilos de la hoja de estilos del usuario (Stylesheet)
+            let matched = ss.match_rules(node);
+            for (d, _) in matched {
+                apply_decls(&mut s, d);
+            }
+
+            // 3. Atributos HTML (ej. width y height)
+            if let Some(ed) = node.element_data() {
+                apply_html_attrs(&mut s, &ed.attributes);
+            }
+
+            // 4. Estilos en línea (inline style - mayor prioridad)
             if let Some(inline) = node.get_attribute("style") {
                 let fake = format!("dummy {{{}}}", inline);
                 let sheet = Stylesheet::parse(&fake);
@@ -28,13 +56,6 @@ fn resolve_node(ss: &Stylesheet, node: &Rc<Node>, parent: &ComputedStyle, map: &
                     apply_decls(&mut s, &rule.declarations);
                 }
             }
-
-            if let Some(tag) = node.tag_name() { apply_tag_defaults(&mut s, tag); }
-
-            let matched = ss.match_rules(node);
-            for (d, _) in matched { apply_decls(&mut s, d); }
-
-            if let Some(ed) = node.element_data() { apply_html_attrs(&mut s, &ed.attributes); }
 
             s
         }
@@ -157,38 +178,7 @@ fn apply_prop(style: &mut ComputedStyle, prop: &str, value: &str) {
         "position" => { style.position = match v { "relative"=>Position::Relative,"absolute"=>Position::Absolute,"fixed"=>Position::Fixed,"sticky"=>Position::Sticky,_=>Position::Static }; }
         "top" => style.top = parse_len(v), "right" => style.right = parse_len(v),
         "bottom" => style.bottom = parse_len(v), "left" => style.left = parse_len(v),
-        _ => {}
-    }
-}
-
-fn apply_tag_defaults(s: &mut ComputedStyle, tag: &str) {
-    let block_tags = ["html","body","div","section","header","footer","nav","main","article","aside","figure","figcaption","details","summary","form","fieldset","p","h1","h2","h3","h4","h5","h6","blockquote","pre","hr","table","ul","ol","li","a","span","em","strong","i","b","u","s","small","sub","sup","code","label","button","input","textarea","select","option","img","picture","br","mark","ins","del"];
-    if block_tags.contains(&tag) { s.display = taffy::Display::Block; }
-    let hidden = ["head","meta","link","script","style","title","noscript"];
-    if hidden.contains(&tag) { s.display = taffy::Display::None; }
-    match tag {
-        "h1" => { s.font_size = 32.0; }
-        "h2" => { s.font_size = 28.0; }
-        "h3" => { s.font_size = 24.0; }
-        "h4" => { s.font_size = 20.0; }
-        "h5" => { s.font_size = 16.0; }
-        "h6" => { s.font_size = 14.0; }
-        "small" => { s.font_size *= 0.8; }
-        "pre" | "code" => { s.font_family = "monospace".to_string(); }
-        "strong" | "b" | "th" => { s.font_weight = 700; }
-        "em" | "i" => { s.font_weight = 500; }
-        "a" => { s.color = Color::new(0, 0, 238, 255); }
-        "body" => { s.margin_top = Length::Px(8.0); s.margin_right = Length::Px(8.0); s.margin_bottom = Length::Px(8.0); s.margin_left = Length::Px(8.0); }
-        "ul" | "ol" => { s.margin_top = Length::Px(16.0); s.margin_bottom = Length::Px(16.0); s.padding_left = Length::Px(40.0); }
-        "p" => { s.margin_top = Length::Px(16.0); s.margin_bottom = Length::Px(16.0); }
-        "input" => { s.display = taffy::Display::Block; s.min_height = Length::Px(36.0); }
-        "button" => { s.display = taffy::Display::Block; s.font_weight = 500; s.min_height = Length::Px(36.0); }
-        "select" => { s.display = taffy::Display::Block; s.min_height = Length::Px(36.0); }
-        "textarea" => { s.display = taffy::Display::Block; s.min_height = Length::Px(36.0); }
-        "label" => { s.display = taffy::Display::Block; }
-        "option" => { s.display = taffy::Display::Block; }
-        "blockquote" => { s.margin_top = Length::Px(16.0); s.margin_bottom = Length::Px(16.0); s.margin_left = Length::Px(40.0); s.margin_right = Length::Px(40.0); }
-        "hr" => { s.border.top = BorderSide { width: 1.0, style: BorderLineStyle::Solid, color: Color::new(128, 128, 128, 255) }; }
+        "border-radius" => style.border_radius = parse_len(v),
         _ => {}
     }
 }
@@ -344,17 +334,43 @@ fn parse_border_width(v:&str)->f32{
     let v=v.trim().trim_end_matches("px").trim();
     v.parse::<f32>().unwrap_or(0.0)
 }
+fn split_css_values(v: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0;
+    for c in v.chars() {
+        if c == '(' {
+            depth += 1;
+            current.push(c);
+        } else if c == ')' {
+            if depth > 0 { depth -= 1; }
+            current.push(c);
+        } else if c.is_whitespace() && depth == 0 {
+            if !current.trim().is_empty() {
+                parts.push(current.trim().to_string());
+                current.clear();
+            }
+        } else {
+            current.push(c);
+        }
+    }
+    if !current.trim().is_empty() {
+        parts.push(current.trim().to_string());
+    }
+    parts
+}
+
 fn parse_border_shorthand(v:&str)->BorderStyle{
-    let parts:Vec<&str>=v.split_whitespace().collect();
+    let parts = split_css_values(v);
     let mut w=0.0;let mut c=Color::black();let mut s=BorderLineStyle::None;
-    for p in parts{if let Some(cl)=parse_color(p){c=cl;}else{match p{"none"=>s=BorderLineStyle::None,"solid"=>s=BorderLineStyle::Solid,"dashed"=>s=BorderLineStyle::Dashed,"dotted"=>s=BorderLineStyle::Dotted,"double"=>s=BorderLineStyle::Double,_=>{let n=parse_border_width(p);if n>0.0||p=="0"{w=n;}else{w=1.0;}}}}}
+    for p in &parts{if let Some(cl)=parse_color(p){c=cl;}else{match p.as_str(){"none"=>s=BorderLineStyle::None,"solid"=>s=BorderLineStyle::Solid,"dashed"=>s=BorderLineStyle::Dashed,"dotted"=>s=BorderLineStyle::Dotted,"double"=>s=BorderLineStyle::Double,_=>{let n=parse_border_width(p);if n>0.0||p=="0"{w=n;}else{w=1.0;}}}}}
     BorderStyle{top:BorderSide{width:w,style:s,color:c},right:BorderSide{width:w,style:s,color:c},bottom:BorderSide{width:w,style:s,color:c},left:BorderSide{width:w,style:s,color:c}}
 }
 
 fn parse_single_border(v:&str)->Option<BorderSide>{
-    let parts:Vec<&str>=v.split_whitespace().collect();
+    let parts = split_css_values(v);
     let mut w=0.0;let mut c=Color::black();let mut s=BorderLineStyle::None;
-    for p in parts{if let Some(cl)=parse_color(p){c=cl;}else{match p{"none"=>s=BorderLineStyle::None,"solid"=>s=BorderLineStyle::Solid,"dashed"=>s=BorderLineStyle::Dashed,"dotted"=>s=BorderLineStyle::Dotted,"double"=>s=BorderLineStyle::Double,_=>{w=parse_border_width(p);}}}}
+    for p in &parts{if let Some(cl)=parse_color(p){c=cl;}else{match p.as_str(){"none"=>s=BorderLineStyle::None,"solid"=>s=BorderLineStyle::Solid,"dashed"=>s=BorderLineStyle::Dashed,"dotted"=>s=BorderLineStyle::Dotted,"double"=>s=BorderLineStyle::Double,_=>{w=parse_border_width(p);}}}}
     Some(BorderSide{width:w,style:s,color:c})
 }
 
