@@ -36,6 +36,8 @@ struct App {
     mouse_x: f32,
     mouse_y: f32,
     dragging_scrollbar: bool,
+    dragging_select: bool,
+    dragging_node: Option<*const dom::Node>,
     last_click_time: Instant,
     last_click_pos: (f32, f32),
     click_count: u32,
@@ -56,6 +58,8 @@ impl App {
             scroll_y: 0.0,
             mouse_x: 0.0, mouse_y: 0.0,
             dragging_scrollbar: false,
+            dragging_select: false,
+            dragging_node: None,
             last_click_time: std::time::Instant::now(),
             last_click_pos: (0.0, 0.0),
             click_count: 0,
@@ -65,11 +69,24 @@ impl App {
         }
     }
 
+    fn focus_node(&mut self, key: Option<String>) {
+        if self.form.focused != key {
+            self.form.focus(key);
+            if let Some(ref dom) = self.dom {
+                if let Some(root) = dom.document_element() {
+                    if let Some(ref ss) = self.stylesheet {
+                        self.styles = style::resolve_styles(ss, root, self.hovered_node, self.form.focused.as_deref());
+                    }
+                }
+            }
+        }
+    }
+
     fn load(&mut self, html: &str, css: &str) {
         let dom = DomTree::parse_html(html);
         let ss = css::Stylesheet::parse(css);
         if let Some(root) = dom.document_element() {
-            self.styles = style::resolve_styles(&ss, root, self.hovered_node);
+            self.styles = style::resolve_styles(&ss, root, self.hovered_node, self.form.focused.as_deref());
         }
         self.stylesheet = Some(ss);
         self.form = form::FormState::new();
@@ -147,7 +164,7 @@ impl App {
             if let Some(ref dom) = self.dom {
                 if let Some(root) = dom.document_element() {
                     if let Some(ref ss) = self.stylesheet {
-                        self.styles = style::resolve_styles(ss, root, self.hovered_node);
+                        self.styles = style::resolve_styles(ss, root, self.hovered_node, self.form.focused.as_deref());
                     }
                 }
             }
@@ -238,35 +255,44 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.state == ElementState::Pressed {
                     if let Some(ref focused) = self.form.focused.clone() {
-                        let len = self.form.get_value(focused).len();
-                        self.form.sel_all = None;
                         match &event.logical_key {
                             Key::Named(NamedKey::Backspace) => {
-                                if len > 0 {
-                                    let pos = self.form.cursor(focused).min(len);
-                                    let p = if pos > 0 { pos - 1 } else { 0 };
-                                    let mut v = self.form.get_value(focused).to_string();
-                                    v.remove(p);
-                                    self.form.set_value(focused, v);
-                                    self.form.set_cursor(focused, p);
+                                if !delete_selected_text(&mut self.form, focused) {
+                                    let len = self.form.get_value(focused).chars().count();
+                                    if len > 0 {
+                                        let pos = self.form.cursor(focused).min(len);
+                                        if pos > 0 {
+                                            let mut chars: Vec<char> = self.form.get_value(focused).chars().collect();
+                                            chars.remove(pos - 1);
+                                            let new_val: String = chars.into_iter().collect();
+                                            self.form.set_value(focused, new_val);
+                                            self.form.set_cursor(focused, pos - 1);
+                                        }
+                                    }
                                 }
                                 if let Some(w) = &self.window { w.request_redraw(); }
                             }
                             Key::Named(NamedKey::Enter) => {
+                                delete_selected_text(&mut self.form, focused);
+                                let len = self.form.get_value(focused).chars().count();
                                 let pos = self.form.cursor(focused).min(len);
-                                let mut v = self.form.get_value(focused).to_string();
-                                v.insert(pos, '\n');
-                                self.form.set_value(focused, v);
+                                let mut chars: Vec<char> = self.form.get_value(focused).chars().collect();
+                                chars.insert(pos, '\n');
+                                let new_val: String = chars.into_iter().collect();
+                                self.form.set_value(focused, new_val);
                                 self.form.set_cursor(focused, pos + 1);
                                 if let Some(w) = &self.window { w.request_redraw(); }
                             }
-                            Key::Named(NamedKey::Escape) => { self.form.focus(None); if let Some(w) = &self.window { w.request_redraw(); } }
+                            Key::Named(NamedKey::Escape) => { self.focus_node(None); if let Some(w) = &self.window { w.request_redraw(); } }
                             Key::Character(c) if c.len() == 1 && c.as_bytes()[0] >= 32 => {
+                                delete_selected_text(&mut self.form, focused);
+                                let len = self.form.get_value(focused).chars().count();
                                 let pos = self.form.cursor(focused).min(len);
-                                let mut v = self.form.get_value(focused).to_string();
-                                v.insert(pos, c.chars().next().unwrap());
-                                self.form.set_value(focused, v);
-                                self.form.set_cursor(focused, pos + c.len());
+                                let mut chars: Vec<char> = self.form.get_value(focused).chars().collect();
+                                chars.insert(pos, c.chars().next().unwrap());
+                                let new_val: String = chars.into_iter().collect();
+                                self.form.set_value(focused, new_val);
+                                self.form.set_cursor(focused, pos + 1);
                                 if let Some(w) = &self.window { w.request_redraw(); }
                             }
                             _ => {}
@@ -326,23 +352,42 @@ impl ApplicationHandler for App {
                         if let Some((node, form_type)) = self.hit_test(self.mouse_x, self.mouse_y + self.scroll_y) {
                             let key = format!("{:p}", dom::node_ptr(&node));
                             match form_type {
-                                "checkbox" => { self.form.toggle(&key); self.form.focus(None); self.click_count = 0; }
-                                "radio" => { self.form.toggle(&key); self.form.focus(None); self.click_count = 0; }
+                                "checkbox" => { self.form.toggle(&key); self.focus_node(None); self.click_count = 0; }
+                                "radio" => { self.form.toggle(&key); self.focus_node(None); self.click_count = 0; }
                                 "text" | "textarea" => {
-                                     self.form.focus(Some(key.clone()));
-                                     if self.click_count >= 2 { self.form.select_all(&key); }
+                                     self.focus_node(Some(key.clone()));
                                      let val = self.form.get_value(&key);
-                                     self.form.set_cursor(&key, val.len());
+                                     let mut start_idx = val.chars().count();
+                                     let node_ptr = dom::node_ptr(&node);
+                                     if let Some(root) = self.dom.as_ref().and_then(|d| d.document_element()) {
+                                         if let Some((node_x, _)) = get_node_abs_pos(&root, node_ptr, &self.layout, 0.0, 0.0) {
+                                             if let Some(style) = self.styles.get(&node_ptr) {
+                                                 let padding_left = match style.padding_left { crate::style::Length::Px(v) => v, _ => 0.0 };
+                                                 let border_left = style.border.left.width;
+                                                 let cx = node_x + padding_left + border_left;
+                                                 let target_x = self.mouse_x - cx;
+                                                 start_idx = toldo_ui_engine::render::painter::index_at_x(style, val, target_x);
+                                             }
+                                         }
+                                     }
+                                     if self.click_count >= 2 {
+                                         self.form.select_all(&key);
+                                     } else {
+                                         self.form.set_cursor(&key, start_idx);
+                                         self.form.set_selection(&key, start_idx, start_idx);
+                                     }
                                      self.caret_on = true;
+                                     self.dragging_select = true;
+                                     self.dragging_node = Some(node_ptr);
                                 }
                                 _ => {
-                                    self.form.focus(None);
+                                    self.focus_node(None);
                                     self.click_count = 0;
                                 }
                             }
                             if let Some(w) = &self.window { w.request_redraw(); }
                         } else {
-                            self.form.focus(None);
+                            self.focus_node(None);
                             self.click_count = 0;
                         }
  
@@ -361,6 +406,8 @@ impl ApplicationHandler for App {
                     }
                     ElementState::Released => {
                         self.dragging_scrollbar = false;
+                        self.dragging_select = false;
+                        self.dragging_node = None;
                     }
                 }
                 self.update_cursor_icon();
@@ -382,6 +429,31 @@ impl ApplicationHandler for App {
                     self.scroll_y = (ratio * max_scroll).clamp(0.0, max_scroll);
                     if let Some(w) = &self.window { w.request_redraw(); }
                 }
+ 
+                if self.dragging_select {
+                    if let Some(node_ptr) = self.dragging_node {
+                        let key = format!("{:p}", node_ptr);
+                        if let Some(root) = self.dom.as_ref().and_then(|d| d.document_element()) {
+                            if let Some((node_x, _)) = get_node_abs_pos(&root, node_ptr, &self.layout, 0.0, 0.0) {
+                                if let Some(style) = self.styles.get(&node_ptr) {
+                                    let padding_left = match style.padding_left { crate::style::Length::Px(v) => v, _ => 0.0 };
+                                    let border_left = style.border.left.width;
+                                    let cx = node_x + padding_left + border_left;
+                                    let val = self.form.get_value(&key);
+                                    let target_x = self.mouse_x - cx;
+                                    let current_idx = toldo_ui_engine::render::painter::index_at_x(style, val, target_x);
+ 
+                                    if let Some((start_idx, _)) = self.form.get_selection(&key) {
+                                        self.form.set_selection(&key, start_idx, current_idx);
+                                        self.form.set_cursor(&key, current_idx);
+                                        if let Some(w) = &self.window { w.request_redraw(); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+  
                 self.update_cursor_icon();
                 if self.update_hover() {
                     if let Some(w) = &self.window { w.request_redraw(); }
@@ -482,6 +554,59 @@ impl App {
             }
         }
     }
+}
+
+fn delete_selected_text(form: &mut form::FormState, id: &str) -> bool {
+    if let Some((start, end)) = form.get_selection(id) {
+        if start != end {
+            let s_min = start.min(end);
+            let s_max = start.max(end);
+            let val = form.get_value(id);
+            let chars: Vec<char> = val.chars().collect();
+            if s_min < chars.len() {
+                let mut new_chars = Vec::new();
+                for i in 0..chars.len() {
+                    if i < s_min || i >= s_max {
+                        new_chars.push(chars[i]);
+                    }
+                }
+                let new_val: String = new_chars.into_iter().collect();
+                form.set_value(id, new_val);
+                form.set_cursor(id, s_min);
+            } else if chars.is_empty() {
+                form.set_value(id, String::new());
+                form.set_cursor(id, 0);
+            }
+            form.clear_selection(id);
+            return true;
+        }
+    }
+    false
+}
+
+fn get_node_abs_pos(
+    root: &Rc<dom::Node>,
+    target_ptr: *const dom::Node,
+    layout: &layout::LayoutEngine,
+    px: f32,
+    py: f32,
+) -> Option<(f32, f32)> {
+    let ptr = dom::node_ptr(root);
+    if ptr == target_ptr {
+        if let Some(lr) = layout.get(ptr) {
+            return Some((px + lr.location.x, py + lr.location.y));
+        }
+    }
+    if let Some(lr) = layout.get(ptr) {
+        let x = px + lr.location.x;
+        let y = py + lr.location.y;
+        for child in &root.children {
+            if let Some(pos) = get_node_abs_pos(child, target_ptr, layout, x, y) {
+                return Some(pos);
+            }
+        }
+    }
+    None
 }
 
 fn main() {

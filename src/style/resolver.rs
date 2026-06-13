@@ -18,28 +18,28 @@ fn get_user_agent_stylesheet() -> &'static Stylesheet {
     })
 }
 
-pub fn resolve_styles(stylesheet: &Stylesheet, root: Rc<Node>, hovered_node: Option<*const Node>) -> StyleMap {
+pub fn resolve_styles(stylesheet: &Stylesheet, root: Rc<Node>, hovered_node: Option<*const Node>, focused_node_key: Option<&str>) -> StyleMap {
     let mut map = StyleMap::new();
-    resolve_node(stylesheet, &root, &ComputedStyle::default(), &mut map, hovered_node);
+    resolve_node(stylesheet, &root, &ComputedStyle::default(), &mut map, hovered_node, focused_node_key);
     map
 }
 
-fn resolve_node(ss: &Stylesheet, node: &Rc<Node>, parent: &ComputedStyle, map: &mut StyleMap, hovered_node: Option<*const Node>) {
+fn resolve_node(ss: &Stylesheet, node: &Rc<Node>, parent: &ComputedStyle, map: &mut StyleMap, hovered_node: Option<*const Node>, focused_node_key: Option<&str>) {
     let ptr = dom::node_ptr(node);
     let style = match &node.node_type {
         NodeType::Element(_) => {
-            // Estilo base (sin hover)
+            // Estilo base (sin hover ni focus)
             let mut style_base = ComputedStyle::default();
             style_base.inherit(parent);
 
             // 1. Estilos por defecto del User Agent
-            let ua_matched_base = get_user_agent_stylesheet().match_rules(node, None);
+            let ua_matched_base = get_user_agent_stylesheet().match_rules(node, None, None);
             for (d, _) in ua_matched_base {
                 apply_decls(&mut style_base, d);
             }
 
             // 2. Estilos de la hoja de estilos del usuario (Stylesheet)
-            let matched_base = ss.match_rules(node, None);
+            let matched_base = ss.match_rules(node, None, None);
             for (d, _) in matched_base {
                 apply_decls(&mut style_base, d);
             }
@@ -59,26 +59,27 @@ fn resolve_node(ss: &Stylesheet, node: &Rc<Node>, parent: &ComputedStyle, map: &
             }
 
             let is_hovered = crate::css::is_node_hovered(node, hovered_node);
+            let is_focused = crate::css::is_node_focused(node, focused_node_key);
 
-            if is_hovered {
-                let mut style_hover = ComputedStyle::default();
-                style_hover.inherit(parent);
+            if is_hovered || is_focused {
+                let mut style_state = ComputedStyle::default();
+                style_state.inherit(parent);
 
-                // 1. Estilos por defecto del User Agent (con hover)
-                let ua_matched_hover = get_user_agent_stylesheet().match_rules(node, hovered_node);
-                for (d, _) in ua_matched_hover {
-                    apply_decls(&mut style_hover, d);
+                // 1. Estilos por defecto del User Agent (con hover y/o focus)
+                let ua_matched_state = get_user_agent_stylesheet().match_rules(node, hovered_node, focused_node_key);
+                for (d, _) in ua_matched_state {
+                    apply_decls(&mut style_state, d);
                 }
 
-                // 2. Estilos de la hoja de estilos del usuario (con hover)
-                let matched_hover = ss.match_rules(node, hovered_node);
-                for (d, _) in matched_hover {
-                    apply_decls(&mut style_hover, d);
+                // 2. Estilos de la hoja de estilos del usuario (con hover y/o focus)
+                let matched_state = ss.match_rules(node, hovered_node, focused_node_key);
+                for (d, _) in matched_state {
+                    apply_decls(&mut style_state, d);
                 }
 
                 // 3. Atributos HTML
                 if let Some(ed) = node.element_data() {
-                    apply_html_attrs(&mut style_hover, &ed.attributes);
+                    apply_html_attrs(&mut style_state, &ed.attributes);
                 }
 
                 // 4. Estilos en línea
@@ -86,20 +87,20 @@ fn resolve_node(ss: &Stylesheet, node: &Rc<Node>, parent: &ComputedStyle, map: &
                     let fake = format!("dummy {{{}}}", inline);
                     let sheet = Stylesheet::parse(&fake);
                     if let Some(rule) = sheet.rules.first() {
-                        apply_decls(&mut style_hover, &rule.declarations);
+                        apply_decls(&mut style_state, &rule.declarations);
                     }
                 }
 
                 // Lógica de botón por defecto si no tiene un fondo personalizado en hover
-                if node.tag_name() == Some("button") {
-                    let has_css_hover_bg = style_hover.background_color != style_base.background_color
-                        || style_hover.background_gradient != style_base.background_gradient;
+                if node.tag_name() == Some("button") && is_hovered {
+                    let has_css_hover_bg = style_state.background_color != style_base.background_color
+                        || style_state.background_gradient != style_base.background_gradient;
                     if !has_css_hover_bg {
-                        style_hover.background_color = style_base.background_color.darken(0.15);
+                        style_state.background_color = style_base.background_color.darken(0.15);
                     }
                 }
 
-                style_hover
+                style_state
             } else {
                 style_base
             }
@@ -116,7 +117,7 @@ fn resolve_node(ss: &Stylesheet, node: &Rc<Node>, parent: &ComputedStyle, map: &
 
     let parent_style = map.get(&ptr).cloned().unwrap_or_else(|| parent.clone());
     for child in &node.children {
-        resolve_node(ss, child, &parent_style, map, hovered_node);
+        resolve_node(ss, child, &parent_style, map, hovered_node, focused_node_key);
     }
 }
 

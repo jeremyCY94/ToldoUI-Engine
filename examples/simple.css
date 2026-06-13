@@ -256,3 +256,8 @@ textarea,
 .btn-custom-hover:hover {
   background-color: #27ae60;
 }
+
+/*input:focus {
+  border: 1px solid #3498db;
+  background-color: #3f3f3f;
+}*/
