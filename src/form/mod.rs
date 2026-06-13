@@ -6,12 +6,18 @@ pub struct FormState {
     pub checked: HashMap<String, bool>,
     pub focused: Option<String>,
     pub cursor_pos: HashMap<String, usize>,
-    pub sel_all: Option<String>,
+    pub selection: HashMap<String, (usize, usize)>, // (start, end)
 }
 
 impl FormState {
     pub fn new() -> Self {
-        FormState { input_values: HashMap::new(), checked: HashMap::new(), focused: None, cursor_pos: HashMap::new(), sel_all: None }
+        FormState {
+            input_values: HashMap::new(),
+            checked: HashMap::new(),
+            focused: None,
+            cursor_pos: HashMap::new(),
+            selection: HashMap::new(),
+        }
     }
 
     pub fn get_value(&self, id: &str) -> &str {
@@ -40,15 +46,36 @@ impl FormState {
     }
 
     pub fn focus(&mut self, id: Option<String>) {
-        if id != self.focused { self.sel_all = None; }
+        if id != self.focused {
+            if let Some(ref prev) = self.focused {
+                self.selection.remove(prev);
+            }
+        }
         self.focused = id;
     }
 
     pub fn select_all(&mut self, id: &str) {
-        self.sel_all = Some(id.to_string());
+        let val_len = self.get_value(id).chars().count();
+        self.set_selection(id, 0, val_len);
+    }
+
+    pub fn set_selection(&mut self, id: &str, start: usize, end: usize) {
+        self.selection.insert(id.to_string(), (start, end));
+    }
+
+    pub fn get_selection(&self, id: &str) -> Option<(usize, usize)> {
+        self.selection.get(id).copied()
+    }
+
+    pub fn clear_selection(&mut self, id: &str) {
+        self.selection.remove(id);
     }
 
     pub fn is_selected(&self, id: &str) -> bool {
-        self.sel_all.as_ref().map_or(false, |s| s == id)
+        if let Some((start, end)) = self.selection.get(id) {
+            start != end
+        } else {
+            false
+        }
     }
 }
