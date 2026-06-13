@@ -23,6 +23,7 @@ impl Length {
     }
 }
 
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Color { pub r: u8, pub g: u8, pub b: u8, pub a: u8 }
 impl Color {
@@ -31,6 +32,15 @@ impl Color {
     #[allow(dead_code)]
     pub fn white() -> Self { Color::new(255,255,255,255) }
     pub fn transparent() -> Self { Color::new(0,0,0,0) }
+    pub fn darken(&self, factor: f32) -> Self {
+        let f = (1.0 - factor).clamp(0.0, 1.0);
+        Color {
+            r: (self.r as f32 * f).round().min(255.0).max(0.0) as u8,
+            g: (self.g as f32 * f).round().min(255.0).max(0.0) as u8,
+            b: (self.b as f32 * f).round().min(255.0).max(0.0) as u8,
+            a: self.a,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
