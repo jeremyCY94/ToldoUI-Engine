@@ -18,34 +18,35 @@ fn get_user_agent_stylesheet() -> &'static Stylesheet {
     })
 }
 
-pub fn resolve_styles(stylesheet: &Stylesheet, root: Rc<Node>) -> StyleMap {
+pub fn resolve_styles(stylesheet: &Stylesheet, root: Rc<Node>, hovered_node: Option<*const Node>) -> StyleMap {
     let mut map = StyleMap::new();
-    resolve_node(stylesheet, &root, &ComputedStyle::default(), &mut map);
+    resolve_node(stylesheet, &root, &ComputedStyle::default(), &mut map, hovered_node);
     map
 }
 
-fn resolve_node(ss: &Stylesheet, node: &Rc<Node>, parent: &ComputedStyle, map: &mut StyleMap) {
+fn resolve_node(ss: &Stylesheet, node: &Rc<Node>, parent: &ComputedStyle, map: &mut StyleMap, hovered_node: Option<*const Node>) {
     let ptr = dom::node_ptr(node);
     let style = match &node.node_type {
         NodeType::Element(_) => {
-            let mut s = ComputedStyle::default();
-            s.inherit(parent);
+            // Estilo base (sin hover)
+            let mut style_base = ComputedStyle::default();
+            style_base.inherit(parent);
 
             // 1. Estilos por defecto del User Agent
-            let ua_matched = get_user_agent_stylesheet().match_rules(node);
-            for (d, _) in ua_matched {
-                apply_decls(&mut s, d);
+            let ua_matched_base = get_user_agent_stylesheet().match_rules(node, None);
+            for (d, _) in ua_matched_base {
+                apply_decls(&mut style_base, d);
             }
 
             // 2. Estilos de la hoja de estilos del usuario (Stylesheet)
-            let matched = ss.match_rules(node);
-            for (d, _) in matched {
-                apply_decls(&mut s, d);
+            let matched_base = ss.match_rules(node, None);
+            for (d, _) in matched_base {
+                apply_decls(&mut style_base, d);
             }
 
             // 3. Atributos HTML (ej. width y height)
             if let Some(ed) = node.element_data() {
-                apply_html_attrs(&mut s, &ed.attributes);
+                apply_html_attrs(&mut style_base, &ed.attributes);
             }
 
             // 4. Estilos en línea (inline style - mayor prioridad)
@@ -53,11 +54,55 @@ fn resolve_node(ss: &Stylesheet, node: &Rc<Node>, parent: &ComputedStyle, map: &
                 let fake = format!("dummy {{{}}}", inline);
                 let sheet = Stylesheet::parse(&fake);
                 if let Some(rule) = sheet.rules.first() {
-                    apply_decls(&mut s, &rule.declarations);
+                    apply_decls(&mut style_base, &rule.declarations);
                 }
             }
 
-            s
+            let is_hovered = crate::css::is_node_hovered(node, hovered_node);
+
+            if is_hovered {
+                let mut style_hover = ComputedStyle::default();
+                style_hover.inherit(parent);
+
+                // 1. Estilos por defecto del User Agent (con hover)
+                let ua_matched_hover = get_user_agent_stylesheet().match_rules(node, hovered_node);
+                for (d, _) in ua_matched_hover {
+                    apply_decls(&mut style_hover, d);
+                }
+
+                // 2. Estilos de la hoja de estilos del usuario (con hover)
+                let matched_hover = ss.match_rules(node, hovered_node);
+                for (d, _) in matched_hover {
+                    apply_decls(&mut style_hover, d);
+                }
+
+                // 3. Atributos HTML
+                if let Some(ed) = node.element_data() {
+                    apply_html_attrs(&mut style_hover, &ed.attributes);
+                }
+
+                // 4. Estilos en línea
+                if let Some(inline) = node.get_attribute("style") {
+                    let fake = format!("dummy {{{}}}", inline);
+                    let sheet = Stylesheet::parse(&fake);
+                    if let Some(rule) = sheet.rules.first() {
+                        apply_decls(&mut style_hover, &rule.declarations);
+                    }
+                }
+
+                // Lógica de botón por defecto si no tiene un fondo personalizado en hover
+                if node.tag_name() == Some("button") {
+                    let has_css_hover_bg = style_hover.background_color != style_base.background_color
+                        || style_hover.background_gradient != style_base.background_gradient;
+                    if !has_css_hover_bg {
+                        style_hover.background_color = style_base.background_color.darken(0.15);
+                    }
+                }
+
+                style_hover
+            } else {
+                style_base
+            }
         }
         NodeType::Text(_) => {
             let mut s = ComputedStyle::default();
@@ -71,7 +116,7 @@ fn resolve_node(ss: &Stylesheet, node: &Rc<Node>, parent: &ComputedStyle, map: &
 
     let parent_style = map.get(&ptr).cloned().unwrap_or_else(|| parent.clone());
     for child in &node.children {
-        resolve_node(ss, child, &parent_style, map);
+        resolve_node(ss, child, &parent_style, map, hovered_node);
     }
 }
 

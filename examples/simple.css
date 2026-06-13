@@ -244,3 +244,15 @@ textarea,
   color: white;
   width: 100%;
 }
+
+.btn-custom-hover {
+  background-color: #2ecc71;
+  color: white;
+  border: 1px solid #27ae60;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.btn-custom-hover:hover {
+  background-color: #27ae60;
+}

@@ -36,6 +36,23 @@ pub struct CompoundSelector {
     pub pseudo_classes: Vec<String>,
 }
 
+pub fn is_node_hovered(node: &Node, hovered_node: Option<*const Node>) -> bool {
+    let Some(mut curr) = hovered_node else { return false };
+    while !curr.is_null() {
+        if curr == node as *const Node {
+            return true;
+        }
+        unsafe {
+            if let Some(parent) = (*curr).get_parent() {
+                curr = parent as *const Node;
+            } else {
+                break;
+            }
+        }
+    }
+    false
+}
+
 impl CompoundSelector {
     pub fn specificity(&self) -> (u32, u32, u32) {
         let id = if self.id.is_some() { 1 } else { 0 };
@@ -44,7 +61,7 @@ impl CompoundSelector {
         (id, class, tag)
     }
 
-    pub fn matches(&self, node: &Node) -> bool {
+    pub fn matches(&self, node: &Node, hovered_node: Option<*const Node>) -> bool {
         let edata = match node.element_data() {
             Some(d) => d,
             None => return false,
@@ -72,7 +89,13 @@ impl CompoundSelector {
                 None => return false,
             }
         }
-        if !self.pseudo_classes.is_empty() { return false; }
+        for pseudo in &self.pseudo_classes {
+            if pseudo == "hover" {
+                if !is_node_hovered(node, hovered_node) { return false; }
+            } else {
+                return false;
+            }
+        }
         true
     }
 }
@@ -82,11 +105,11 @@ impl Stylesheet {
         parser::parse_stylesheet(css_text)
     }
 
-    pub fn match_rules<'a>(&'a self, node: &Node) -> Vec<(&'a HashMap<String, String>, u32)> {
+    pub fn match_rules<'a>(&'a self, node: &Node, hovered_node: Option<*const Node>) -> Vec<(&'a HashMap<String, String>, u32)> {
         let mut matched = Vec::new();
         for rule in &self.rules {
             for selector in &rule.selectors {
-                if matches_complex(selector, node) {
+                if matches_complex(selector, node, hovered_node) {
                     let spec = compute_specificity(selector);
                     matched.push((&rule.declarations, spec));
                     break;
@@ -109,7 +132,7 @@ fn compute_specificity(sel: &[SelectorComponent]) -> u32 {
     (id << 20) | (cls << 10) | tag
 }
 
-fn matches_complex(sel: &[SelectorComponent], node: &Node) -> bool {
+fn matches_complex(sel: &[SelectorComponent], node: &Node, hovered_node: Option<*const Node>) -> bool {
     if sel.is_empty() { return false; }
 
     let compounds: Vec<&CompoundSelector> = sel.iter().filter_map(|c| {
@@ -121,10 +144,10 @@ fn matches_complex(sel: &[SelectorComponent], node: &Node) -> bool {
     }).collect();
 
     if compounds.is_empty() { return false; }
-    if compounds.len() == 1 { return compounds[0].matches(node); }
+    if compounds.len() == 1 { return compounds[0].matches(node, hovered_node); }
 
     let last = compounds[compounds.len() - 1];
-    if !last.matches(node) { return false; }
+    if !last.matches(node, hovered_node) { return false; }
 
     let mut current = node as *const Node;
     let mut idx = compounds.len() - 1;
@@ -142,14 +165,14 @@ fn matches_complex(sel: &[SelectorComponent], node: &Node) -> bool {
 
         match comb {
             Combinator::Child => {
-                if !prev.matches(parent) { return false; }
+                if !prev.matches(parent, hovered_node) { return false; }
                 current = parent as *const Node;
             }
             Combinator::Descendant => {
                 let mut found = false;
                 let mut anc = Some(parent);
                 while let Some(a) = anc {
-                    if prev.matches(a) { found = true; current = a as *const Node; break; }
+                    if prev.matches(a, hovered_node) { found = true; current = a as *const Node; break; }
                     anc = a.get_parent();
                 }
                 if !found { return false; }

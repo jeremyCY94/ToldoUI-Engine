@@ -26,6 +26,8 @@ struct App {
     ctx: Option<softbuffer::Context<Rc<Window>>>,
     surface: Option<softbuffer::Surface<Rc<Window>, Rc<Window>>>,
     dom: Option<DomTree>,
+    stylesheet: Option<css::Stylesheet>,
+    hovered_node: Option<*const dom::Node>,
     styles: StyleMap,
     layout: layout::LayoutEngine,
     painter: render::Painter,
@@ -46,7 +48,8 @@ impl App {
     fn new(default_title: &str) -> Self {
         App {
             window: None, ctx: None, surface: None,
-            dom: None, styles: StyleMap::new(),
+            dom: None, stylesheet: None, hovered_node: None,
+            styles: StyleMap::new(),
             layout: layout::LayoutEngine::new(),
             painter: render::Painter::new(),
             form: form::FormState::new(),
@@ -66,8 +69,9 @@ impl App {
         let dom = DomTree::parse_html(html);
         let ss = css::Stylesheet::parse(css);
         if let Some(root) = dom.document_element() {
-            self.styles = style::resolve_styles(&ss, root);
+            self.styles = style::resolve_styles(&ss, root, self.hovered_node);
         }
+        self.stylesheet = Some(ss);
         self.form = form::FormState::new();
         populate_form(&dom, &mut self.form);
         self.dom = Some(dom);
@@ -134,6 +138,25 @@ impl App {
         }
     }
 
+    fn update_hover(&mut self) -> bool {
+        let hovered = self.hit_test(self.mouse_x, self.mouse_y + self.scroll_y)
+            .map(|(node, _)| dom::node_ptr(&node));
+
+        if self.hovered_node != hovered {
+            self.hovered_node = hovered;
+            if let Some(ref dom) = self.dom {
+                if let Some(root) = dom.document_element() {
+                    if let Some(ref ss) = self.stylesheet {
+                        self.styles = style::resolve_styles(ss, root, self.hovered_node);
+                    }
+                }
+            }
+            true
+        } else {
+            false
+        }
+    }
+
     fn draw(&mut self) {
         let window = match &self.window { Some(w) => w.clone(), None => return };
         let _ctx = match &self.ctx { Some(c) => c.clone(), None => return };
@@ -173,7 +196,7 @@ impl App {
                 let r = (p >> 16) & 0xFF;
                 let g = (p >> 8) & 0xFF;
                 let bl = p & 0xFF;
-                b[i] = bl | (g << 16) | (r << 8) | (a << 24);
+                b[i] = bl | (g << 8) | (r << 16) | (a << 24);
             }
             buf.present().unwrap();
         }
@@ -267,12 +290,14 @@ impl ApplicationHandler for App {
                 self.scroll_y = (self.scroll_y - y * 20.0).max(0.0);
                 self.dragging_scrollbar = false;
                 self.update_cursor_icon();
+                self.update_hover();
                 if let Some(w) = &self.window { w.request_redraw(); }
             }
             WindowEvent::MouseWheel { delta: MouseScrollDelta::PixelDelta(pos), .. } => {
                 self.scroll_y = (self.scroll_y - pos.y as f32).max(0.0);
                 self.dragging_scrollbar = false;
                 self.update_cursor_icon();
+                self.update_hover();
                 if let Some(w) = &self.window { w.request_redraw(); }
             }
             WindowEvent::MouseInput { state, button: MouseButton::Left, .. } => {
@@ -286,7 +311,7 @@ impl ApplicationHandler for App {
                 let track_h = wh - 4.0;
                 let thumb_h = (wh / ch * track_h).max(20.0);
                 let max_scroll = (ch - wh).max(0.0);
-
+ 
                 match state {
                     ElementState::Pressed => {
                         // Click on form element
@@ -297,18 +322,18 @@ impl ApplicationHandler for App {
                         } else { self.click_count = 1; }
                         self.last_click_time = now;
                         self.last_click_pos = (self.mouse_x, self.mouse_y);
-
+ 
                         if let Some((node, form_type)) = self.hit_test(self.mouse_x, self.mouse_y + self.scroll_y) {
                             let key = format!("{:p}", dom::node_ptr(&node));
                             match form_type {
                                 "checkbox" => { self.form.toggle(&key); self.form.focus(None); self.click_count = 0; }
                                 "radio" => { self.form.toggle(&key); self.form.focus(None); self.click_count = 0; }
                                 "text" | "textarea" => {
-                                    self.form.focus(Some(key.clone()));
-                                    if self.click_count >= 2 { self.form.select_all(&key); }
-                                    let val = self.form.get_value(&key);
-                                    self.form.set_cursor(&key, val.len());
-                                    self.caret_on = true;
+                                     self.form.focus(Some(key.clone()));
+                                     if self.click_count >= 2 { self.form.select_all(&key); }
+                                     let val = self.form.get_value(&key);
+                                     self.form.set_cursor(&key, val.len());
+                                     self.caret_on = true;
                                 }
                                 _ => {
                                     self.form.focus(None);
@@ -320,7 +345,7 @@ impl ApplicationHandler for App {
                             self.form.focus(None);
                             self.click_count = 0;
                         }
-
+ 
                         // Click on scrollbar thumb → start dragging
                         if self.mouse_y >= 2.0 && self.mouse_y < 2.0 + track_h && self.mouse_x >= sb_x && self.mouse_x < sb_x + sb_w {
                             let thumb_y = if max_scroll > 0.0 { 2.0 + (self.scroll_y / max_scroll) * (track_h - thumb_h) } else { 2.0 };
@@ -339,11 +364,12 @@ impl ApplicationHandler for App {
                     }
                 }
                 self.update_cursor_icon();
+                self.update_hover();
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.mouse_x = position.x as f32;
                 self.mouse_y = position.y as f32;
-
+ 
                 if self.dragging_scrollbar {
                     let win = match &self.window { Some(w) => w.clone(), None => return };
                     let size = win.inner_size();
@@ -357,6 +383,9 @@ impl ApplicationHandler for App {
                     if let Some(w) = &self.window { w.request_redraw(); }
                 }
                 self.update_cursor_icon();
+                if self.update_hover() {
+                    if let Some(w) = &self.window { w.request_redraw(); }
+                }
             }
             _ => {}
         }
