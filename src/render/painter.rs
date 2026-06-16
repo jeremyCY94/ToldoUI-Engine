@@ -96,6 +96,7 @@ impl Painter {
                                 _ => {
                                     let val = form.get_value(&key).to_string();
                                     let focused = form.focused.as_ref().map_or(false, |f| f == &key);
+                                    let scroll_x = form.get_scroll_x(&key);
                                     if focused {
                                         let fc = SolidSource::from_unpremultiplied_argb(255, 50, 130, 250);
                                         let r = lp(&style.border_radius).min(w * 0.5).min(h * 0.5);
@@ -137,40 +138,48 @@ impl Painter {
                                             dt.fill_rect(x, y + h - 2.0, w, 2.0, &Source::Solid(fc), &DrawOptions::new());
                                         }
                                     }
+                                    
+                                    let mw2 = w - lp(&style.padding_left) - lp(&style.padding_right) - 2.0;
+                                    let x1 = (cx + 1.0) as i32;
+                                    let y1 = (y + 2.0) as i32;
+                                    let x2 = (cx + 1.0 + mw2) as i32;
+                                    let y2 = (y + h - 2.0) as i32;
+                                    dt.push_clip_rect(IntRect::new(IntPoint::new(x1, y1), IntPoint::new(x2, y2)));
+
                                     if let Some((start_idx, end_idx)) = form.get_selection(&key) {
                                         if start_idx != end_idx {
                                             let s_min = start_idx.min(end_idx);
                                             let s_max = start_idx.max(end_idx);
-                                            let sel_x1 = cx + 1.0 + x_at_index(&style, &val, s_min);
-                                            let sel_x2 = cx + 1.0 + x_at_index(&style, &val, s_max);
-                                            let mw2 = w - lp(&style.padding_left) - lp(&style.padding_right) - 2.0;
-                                            let sel_w = (sel_x2 - sel_x1).min(x + w - sel_x1 - 2.0).max(0.0);
+                                            let sel_x1 = cx + 1.0 + x_at_index(&style, &val, s_min) - scroll_x;
+                                            let sel_x2 = cx + 1.0 + x_at_index(&style, &val, s_max) - scroll_x;
+                                            let sel_w = (sel_x2 - sel_x1).max(0.0);
                                             let sel_col = SolidSource::from_unpremultiplied_argb(100, 50, 130, 250);
                                             dt.fill_rect(sel_x1, y + 4.0, sel_w, h - 8.0, &Source::Solid(sel_col), &DrawOptions::new());
                                         }
                                     }
                                     if !val.is_empty() {
                                         let tx = cx + 1.0; let ty = y + (h - style.font_size) * 0.5;
-                                        let mw2 = w - lp(&style.padding_left) - lp(&style.padding_right) - 2.0;
                                         let txt_col = SolidSource::from_unpremultiplied_argb(200, 80, 80, 80);
-                                        self.render_text_simple(dt, &style, &val, tx, ty, mw2, txt_col);
+                                        self.render_single_line_text(dt, &style, &val, tx, ty, mw2, txt_col, scroll_x);
                                         if focused && caret_on && !form.is_selected(&key) {
                                             let pos = form.cursor(&key);
                                             let tw = x_at_index(&style, &val, pos);
-                                            let cx2 = cx + 1.0 + tw.min(mw2);
+                                            let cx2 = cx + 1.0 + tw - scroll_x;
                                             let caret_color = SolidSource::from_unpremultiplied_argb(255, 50, 50, 50);
                                             dt.fill_rect(cx2, y + 4.0, 1.5, h - 8.0, &Source::Solid(caret_color), &DrawOptions::new());
                                         }
                                     } else if !focused {
                                         if let Some(ph) = node.get_attribute("placeholder") {
                                             let tx = cx + 1.0; let ty = y + (h - style.font_size) * 0.5;
-                                            self.render_text_simple(dt, &style, ph, tx, ty, w - lp(&style.padding_left) - lp(&style.padding_right) - 2.0, SolidSource::from_unpremultiplied_argb(130, 160, 160, 160));
+                                            self.render_single_line_text(dt, &style, ph, tx, ty, mw2, SolidSource::from_unpremultiplied_argb(130, 160, 160, 160), 0.0);
                                         }
                                     }
                                     if focused && caret_on && val.is_empty() && !form.is_selected(&key) {
                                         let caret_color = SolidSource::from_unpremultiplied_argb(255, 50, 50, 50);
-                                        dt.fill_rect(cx + 2.0, y + 4.0, 1.5, h - 8.0, &Source::Solid(caret_color), &DrawOptions::new());
+                                        dt.fill_rect(cx + 2.0 - scroll_x, y + 4.0, 1.5, h - 8.0, &Source::Solid(caret_color), &DrawOptions::new());
                                     }
+
+                                    dt.pop_clip();
                                 }
                             }
                         }
@@ -180,8 +189,6 @@ impl Painter {
                                 if let Some(text) = child.text() {
                                     if !text.trim().is_empty() {
                                         if let Some(clr) = layout.get(cptr) {
-                                            // Las coordenadas del layout (clr.location) ya contemplan el padding
-                                            // y los bordes calculados por Taffy para alinear/centrar los hijos flexbox.
                                             let tx = x + clr.location.x;
                                             let ty = y + clr.location.y;
                                             let aw = clr.size.width.max(1.0);
@@ -196,7 +203,7 @@ impl Painter {
                                 let ax = x + w - lp(&style.padding_right) - style.border.right.width - aw2 - 4.0;
                                 let ay = y + (h - style.font_size) * 0.5;
                                 let ac = SolidSource::from_unpremultiplied_argb(180, 80,80,80);
-                                self.render_text_simple(dt, &style, arrow, ax, ay, aw2 + 8.0, ac);
+                                self.render_single_line_text(dt, &style, arrow, ax, ay, aw2 + 8.0, ac, 0.0);
                             }
                         }
                         "textarea" => {
@@ -259,6 +266,53 @@ impl Painter {
                 }
             }
             NodeType::Text(_) => {}
+        }
+    }
+
+    fn render_single_line_text(&mut self, dt: &mut DrawTarget, style: &ComputedStyle, text: &str, x: f32, y: f32, max_w: f32, color_override: SolidSource, scroll_x: f32) {
+        if text.is_empty() || max_w <= 0.0 { return; }
+        let font = self.load_font(&style.font_family, style.font_weight)
+            .or_else(|| self.load_font("Arial", style.font_weight))
+            .or_else(|| self.load_font("sans-serif", style.font_weight));
+        let font = match font { Some(f) => f, None => return };
+        let fs = style.font_size;
+        let scale = Scale::uniform(fs);
+        let vm = font.v_metrics(scale);
+        let ascent = vm.ascent;
+
+        let mut cx = x - scroll_x;
+        for ch in text.chars() {
+            let sg = font.glyph(ch).scaled(scale);
+            let aw = sg.h_metrics().advance_width;
+            if cx - x + aw > max_w {
+                break;
+            }
+            if cx + aw >= x {
+                let g = sg.positioned(rpoint(cx, y + ascent));
+                if let Some(bb) = g.pixel_bounding_box() {
+                    let gw = bb.width() as usize;
+                    let gh = bb.height() as usize;
+                    if gw > 0 && gh > 0 {
+                        let mut pix = vec![0u8; gw * gh];
+                        g.draw(|gx, gy, cov| {
+                            let ix = gx as usize; let iy = gy as usize;
+                            if ix < gw && iy < gh { pix[iy * gw + ix] = (cov * 255.0) as u8; }
+                        });
+                        let img_data: Vec<u32> = pix.iter().map(|&a| {
+                            if a == 0 { 0 } else {
+                                let aa = (a as u32 * color_override.a as u32) / 255;
+                                let r = (color_override.r as u32 * aa) / 255;
+                                let g2 = (color_override.g as u32 * aa) / 255;
+                                let b = (color_override.b as u32 * aa) / 255;
+                                (aa << 24) | (r << 16) | (g2 << 8) | b
+                            }
+                        }).collect();
+                        let img = Image { width: gw as i32, height: gh as i32, data: &img_data };
+                        dt.draw_image_at(bb.min.x as f32, bb.min.y as f32, &img, &DrawOptions::new());
+                    }
+                }
+            }
+            cx += aw;
         }
     }
 
@@ -534,15 +588,7 @@ fn lp(l: &crate::style::Length) -> f32 {
     match l { crate::style::Length::Px(v) => *v, _ => 0.0 }
 }
 
-fn mw_font(style: &ComputedStyle, text: &str) -> f32 {
-    let fam = if style.font_family.is_empty() { "Arial" } else { &style.font_family };
-    let data = load_font_data(fam, style.font_weight).or_else(|| load_font_data("Arial", style.font_weight)).or_else(|| load_font_data("sans-serif", style.font_weight));
-    let font = data.and_then(|d| Font::try_from_vec(d));
-    match font {
-        Some(f) => mw(&f, Scale::uniform(style.font_size), text),
-        None => text.len() as f32 * style.font_size * 0.6,
-    }
-}
+
 
 fn mw(font: &Font, scale: Scale, text: &str) -> f32 {
     text.chars().map(|c| font.glyph(c).scaled(scale).h_metrics().advance_width).sum()

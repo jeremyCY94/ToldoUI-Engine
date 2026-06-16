@@ -1,3 +1,5 @@
+pub mod actions;
+
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -7,6 +9,7 @@ pub struct FormState {
     pub focused: Option<String>,
     pub cursor_pos: HashMap<String, usize>,
     pub selection: HashMap<String, (usize, usize)>, // (start, end)
+    pub scroll_x: HashMap<String, f32>,
 }
 
 impl FormState {
@@ -17,6 +20,7 @@ impl FormState {
             focused: None,
             cursor_pos: HashMap::new(),
             selection: HashMap::new(),
+            scroll_x: HashMap::new(),
         }
     }
 
@@ -77,5 +81,13 @@ impl FormState {
         } else {
             false
         }
+    }
+
+    pub fn get_scroll_x(&self, id: &str) -> f32 {
+        self.scroll_x.get(id).copied().unwrap_or(0.0)
+    }
+
+    pub fn set_scroll_x(&mut self, id: &str, val: f32) {
+        self.scroll_x.insert(id.to_string(), val);
     }
 }
