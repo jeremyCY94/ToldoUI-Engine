@@ -183,11 +183,90 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                 app.last_click_time = now;
                 app.last_click_pos = (app.mouse_x, app.mouse_y);
 
-                if let Some((node, form_type)) = app.hit_test(app.mouse_x, app.mouse_y + app.scroll_y) {
+                let mut clicked_dropdown = false;
+                if let Some(ref focused_key) = app.form.focused.clone() {
+                    if let Some(ref dom) = app.dom {
+                        if let Some(root) = dom.document_element() {
+                            fn find_node(node: &std::rc::Rc<dom::Node>, target_key: &str) -> Option<std::rc::Rc<dom::Node>> {
+                                let key = format!("{:p}", dom::node_ptr(node));
+                                if key == target_key {
+                                    return Some(node.clone());
+                                }
+                                for child in &node.children {
+                                    if let Some(n) = find_node(child, target_key) {
+                                        return Some(n);
+                                    }
+                                }
+                                None
+                            }
+                            if let Some(focused_node) = find_node(&root, focused_key) {
+                                if focused_node.tag_name() == Some("select") {
+                                    if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
+                                        if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
+                                            let sw = lr.size.width;
+                                            let sh = lr.size.height;
+                                            
+                                            let mut options = Vec::new();
+                                            for child in &focused_node.children {
+                                                if child.tag_name() == Some("option") {
+                                                    options.push(child.clone());
+                                                }
+                                            }
+                                            
+                                            let opt_h = 30.0;
+                                            let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(&focused_node)) {
+                                                match style.max_height {
+                                                    toldo_ui_engine::style::Length::Px(v) => v,
+                                                    _ => 7.0 * opt_h,
+                                                }
+                                            } else {
+                                                7.0 * opt_h
+                                            };
+                                            let total_h = options.len() as f32 * opt_h;
+                                            let dropdown_h = total_h.min(max_dropdown_h);
+                                            let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
+                                            
+                                            if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+                                                let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
+                                                if clicked_idx < options.len() {
+                                                    let selected_option = &options[clicked_idx];
+                                                    let option_text = selected_option.children_text().trim().to_string();
+                                                    app.form.set_value(focused_key, option_text);
+                                                    
+                                                    for opt in &options {
+                                                        let opt_key = format!("{:p}", dom::node_ptr(opt));
+                                                        app.form.checked.insert(opt_key, false);
+                                                    }
+                                                    let selected_opt_key = format!("{:p}", dom::node_ptr(selected_option));
+                                                    app.form.checked.insert(selected_opt_key, true);
+                                                }
+                                                app.focus_node(None);
+                                                clicked_dropdown = true;
+                                                if let Some(w) = &app.window { w.request_redraw(); }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if clicked_dropdown {
+                    // Click consumed by dropdown
+                } else if let Some((node, form_type)) = app.hit_test(app.mouse_x, app.mouse_y + app.scroll_y) {
                     let key = format!("{:p}", dom::node_ptr(&node));
                     match form_type {
                         "checkbox" => { app.form.toggle(&key); app.focus_node(None); app.click_count = 0; }
                         "radio" => { app.form.toggle(&key); app.focus_node(None); app.click_count = 0; }
+                        "select" => {
+                            if app.form.focused.as_ref() == Some(&key) {
+                                app.focus_node(None);
+                            } else {
+                                app.focus_node(Some(key.clone()));
+                            }
+                            app.click_count = 0;
+                        }
                         "text" | "textarea" => {
                             app.focus_node(Some(key.clone()));
                             let val = app.form.get_value(&key);
@@ -290,22 +369,110 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
     }
 
     app.update_cursor_icon();
-    if app.update_hover() {
+    let mut needs_redraw = app.update_hover();
+    
+    if let Some(ref focused_key) = app.form.focused {
+        if let Some(ref dom) = app.dom {
+            if let Some(root) = dom.document_element() {
+                fn is_select_node(node: &std::rc::Rc<dom::Node>, target_key: &str) -> bool {
+                    let key = format!("{:p}", dom::node_ptr(node));
+                    if key == target_key {
+                        return node.tag_name() == Some("select");
+                    }
+                    for child in &node.children {
+                        if is_select_node(child, target_key) {
+                            return true;
+                        }
+                    }
+                    false
+                }
+                if is_select_node(&root, focused_key) {
+                    needs_redraw = true;
+                }
+            }
+        }
+    }
+    
+    if needs_redraw {
         if let Some(w) = &app.window { w.request_redraw(); }
     }
 }
 
 pub(crate) fn handle_mouse_wheel(app: &mut App, delta: MouseScrollDelta) {
-    match delta {
-        MouseScrollDelta::LineDelta(_, y) => {
-            app.scroll_y = (app.scroll_y - y * 20.0).max(0.0);
-        }
-        MouseScrollDelta::PixelDelta(pos) => {
-            app.scroll_y = (app.scroll_y - pos.y as f32).max(0.0);
+    let mut scrolled_dropdown = false;
+    if let Some(ref focused_key) = app.form.focused.clone() {
+        if let Some(ref dom) = app.dom {
+            if let Some(root) = dom.document_element() {
+                fn find_node(node: &std::rc::Rc<dom::Node>, target_key: &str) -> Option<std::rc::Rc<dom::Node>> {
+                    let key = format!("{:p}", dom::node_ptr(node));
+                    if key == target_key {
+                        return Some(node.clone());
+                    }
+                    for child in &node.children {
+                        if let Some(n) = find_node(child, target_key) {
+                            return Some(n);
+                        }
+                    }
+                    None
+                }
+                if let Some(focused_node) = find_node(&root, focused_key) {
+                    if focused_node.tag_name() == Some("select") {
+                        if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
+                            if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
+                                let sw = lr.size.width;
+                                let sh = lr.size.height;
+                                
+                                let mut options = Vec::new();
+                                for child in &focused_node.children {
+                                    if child.tag_name() == Some("option") {
+                                        options.push(child.clone());
+                                    }
+                                }
+                                
+                                let opt_h = 30.0;
+                                let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(&focused_node)) {
+                                    match style.max_height {
+                                        toldo_ui_engine::style::Length::Px(v) => v,
+                                        _ => 7.0 * opt_h,
+                                    }
+                                } else {
+                                    7.0 * opt_h
+                                };
+                                let total_h = options.len() as f32 * opt_h;
+                                let dropdown_h = total_h.min(max_dropdown_h);
+                                
+                                if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+                                    let scroll_y = app.form.get_dropdown_scroll_y(focused_key);
+                                    let dy = match delta {
+                                        MouseScrollDelta::LineDelta(_, y) => -y * 20.0,
+                                        MouseScrollDelta::PixelDelta(pos) => -pos.y as f32,
+                                    };
+                                    let max_scroll = (total_h - dropdown_h).max(0.0);
+                                    let new_scroll = (scroll_y + dy).clamp(0.0, max_scroll);
+                                    app.form.set_dropdown_scroll_y(focused_key, new_scroll);
+                                    scrolled_dropdown = true;
+                                    if let Some(w) = &app.window { w.request_redraw(); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
-    app.dragging_scrollbar = false;
-    app.update_cursor_icon();
-    app.update_hover();
-    if let Some(w) = &app.window { w.request_redraw(); }
+
+    if !scrolled_dropdown {
+        match delta {
+            MouseScrollDelta::LineDelta(_, y) => {
+                app.scroll_y = (app.scroll_y - y * 20.0).max(0.0);
+            }
+            MouseScrollDelta::PixelDelta(pos) => {
+                app.scroll_y = (app.scroll_y - pos.y as f32).max(0.0);
+            }
+        }
+        app.dragging_scrollbar = false;
+        app.update_cursor_icon();
+        app.update_hover();
+        if let Some(w) = &app.window { w.request_redraw(); }
+    }
 }
