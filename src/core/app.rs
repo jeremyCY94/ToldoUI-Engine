@@ -374,8 +374,8 @@ pub(crate) fn populate_form(dom: &DomTree, form: &mut form::FormState) {
                 if let Some(val) = node.get_attribute("value") {
                     if !val.is_empty() { form.set_value(&key, val.to_string()); }
                 }
-                if let Some(chk) = node.get_attribute("checked") {
-                    if chk == "checked" { form.checked.insert(key.clone(), true); }
+                if node.get_attribute("checked").is_some() {
+                    form.checked.insert(key.clone(), true);
                 }
             }
             "textarea" => {
@@ -415,8 +415,8 @@ pub(crate) fn populate_form(dom: &DomTree, form: &mut form::FormState) {
                 }
             }
             "option" => {
-                if let Some(sel) = node.get_attribute("selected") {
-                    if sel == "selected" { form.checked.insert(key.clone(), true); }
+                if node.get_attribute("selected").is_some() {
+                    form.checked.insert(key.clone(), true);
                 }
             }
             _ => {}
