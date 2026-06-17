@@ -4,7 +4,7 @@ use rusttype::Font;
 use crate::dom::Node;
 use crate::form::FormState;
 use crate::style::ComputedStyle;
-use super::primitives::{lp, stroke_circle};
+use super::primitives::lp;
 use super::text::{render_single_line_text, render_text_simple, render_text, x_at_index};
 
 pub fn paint_checkbox(
@@ -119,6 +119,7 @@ pub fn paint_checkbox(
 
 pub fn paint_radio(
     dt: &mut DrawTarget,
+    style: &ComputedStyle,
     form: &FormState,
     key: &str,
     x: f32,
@@ -126,31 +127,67 @@ pub fn paint_radio(
     w: f32,
     h: f32,
 ) {
-    let r = h.min(16.0) * 0.5;
-    let cx2 = x + w * 0.5;
-    let cy2 = y + h * 0.5;
-    let bs = SolidSource::from_unpremultiplied_argb(200, 80, 80, 80);
-    dt.fill_rect(
-        cx2 - r,
-        cy2 - r,
-        r * 2.0,
-        r * 2.0,
-        &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255)),
-        &DrawOptions::new(),
-    );
-    stroke_circle(dt, cx2, cy2, r, bs);
-    if form.is_checked(key) {
-        let c = SolidSource::from_unpremultiplied_argb(255, 33, 150, 243);
-        dt.fill_rect(
-            cx2 - r * 0.4,
-            cy2 - r * 0.4,
-            r * 0.8,
-            r * 0.8,
-            &Source::Solid(c),
-            &DrawOptions::new(),
-        );
+    let r = (h.min(18.0) * 0.5) - 1.0;
+    let cx = x + w * 0.5;
+    let cy = y + h * 0.5;
+
+    let is_checked = form.is_checked(key);
+
+    let bg_color = if style.background_color.a > 0 {
+        SolidSource::from_unpremultiplied_argb(
+            style.background_color.a,
+            style.background_color.r,
+            style.background_color.g,
+            style.background_color.b,
+        )
+    } else {
+        SolidSource::from_unpremultiplied_argb(255, 255, 255, 255)
+    };
+
+    let border_color = if is_checked {
+        SolidSource::from_unpremultiplied_argb(255, 33, 150, 243)
+    } else if style.border.top.width > 0.0 {
+        let bc = &style.border.top.color;
+        SolidSource::from_unpremultiplied_argb(bc.a, bc.r, bc.g, bc.b)
+    } else {
+        SolidSource::from_unpremultiplied_argb(255, 200, 200, 200)
+    };
+
+    let main_circle = draw_circle_path(cx, cy, r);
+    dt.fill(&main_circle, &Source::Solid(bg_color), &DrawOptions::new());
+
+    let stroke_style = StrokeStyle {
+        width: 1.5,
+        cap: LineCap::Butt,
+        join: LineJoin::Miter,
+        miter_limit: 10.0,
+        dash_array: Vec::new(),
+        dash_offset: 0.0,
+    };
+    dt.stroke(&main_circle, &Source::Solid(border_color), &stroke_style, &DrawOptions::new());
+
+    if is_checked {
+        let inner_r = r * 0.55;
+        let inner_circle = draw_circle_path(cx, cy, inner_r);
+        let active_color = SolidSource::from_unpremultiplied_argb(255, 33, 150, 243);
+        dt.fill(&inner_circle, &Source::Solid(active_color), &DrawOptions::new());
     }
 }
+
+fn draw_circle_path(cx: f32, cy: f32, r: f32) -> Path {
+    let mut pb = PathBuilder::new();
+    let kappa = 0.55228475;
+    let ox = r * kappa;
+    
+    pb.move_to(cx + r, cy);
+    pb.cubic_to(cx + r, cy + ox, cx + ox, cy + r, cx, cy + r);
+    pb.cubic_to(cx - ox, cy + r, cx - r, cy + ox, cx - r, cy);
+    pb.cubic_to(cx - r, cy - ox, cx - ox, cy - r, cx, cy - r);
+    pb.cubic_to(cx + ox, cy - r, cx + r, cy - ox, cx + r, cy);
+    pb.close();
+    pb.finish()
+}
+
 
 pub fn paint_input_text(
     dt: &mut DrawTarget,

@@ -1,6 +1,6 @@
 use super::types::{Position, Length, BorderStyle, BoxSizing, Color, TextAlign, LinearGradient, Cursor};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ComputedStyle {
     pub display: taffy::Display, pub position: Position,
     pub width: Length, pub height: Length,

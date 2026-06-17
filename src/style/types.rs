@@ -54,14 +54,14 @@ impl Default for Position { fn default() -> Self { Position::Static } }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BorderLineStyle { None, Solid, Dashed, Dotted, Double }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BorderSide { pub width: f32, pub style: BorderLineStyle, pub color: Color }
 impl BorderSide {
     pub fn none() -> Self { BorderSide { width: 0.0, style: BorderLineStyle::None, color: Color::transparent() } }
     pub fn to_border(&self) -> taffy::LengthPercentage { taffy::LengthPercentage::Length(self.width) }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BorderStyle {
     pub top: BorderSide, pub right: BorderSide, pub bottom: BorderSide, pub left: BorderSide,
 }
