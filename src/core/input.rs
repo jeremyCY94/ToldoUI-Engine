@@ -301,7 +301,41 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                     let key = format!("{:p}", dom::node_ptr(&click_node));
                     match form_type {
                         "checkbox" => { app.form.toggle(&key); app.focus_node(None); app.click_count = 0; }
-                        "radio" => { app.form.toggle(&key); app.focus_node(None); app.click_count = 0; }
+                        "radio" => {
+                            if !app.form.is_checked(&key) {
+                                app.form.checked.insert(key.clone(), true);
+                                if let Some(ref dom) = app.dom {
+                                    if let Some(root) = dom.document_element() {
+                                        let name_attr = click_node.get_attribute("name");
+                                        fn deselect_other_radios(
+                                            node: &std::rc::Rc<toldo_ui_engine::dom::Node>,
+                                            target_key: &str,
+                                            group_name: &str,
+                                            form: &mut toldo_ui_engine::form::FormState,
+                                        ) {
+                                            let key = format!("{:p}", toldo_ui_engine::dom::node_ptr(node));
+                                            if key != target_key && node.tag_name() == Some("input") {
+                                                if node.get_attribute("type") == Some("radio") {
+                                                    if node.get_attribute("name") == Some(group_name) {
+                                                        form.checked.insert(key.clone(), false);
+                                                    }
+                                                }
+                                            }
+                                            for child in &node.children {
+                                                deselect_other_radios(child, target_key, group_name, form);
+                                            }
+                                        }
+                                        if let Some(name) = name_attr {
+                                            if !name.is_empty() {
+                                                deselect_other_radios(&root, &key, name, &mut app.form);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            app.focus_node(None);
+                            app.click_count = 0;
+                        }
                         "select" => {
                             if app.form.focused.as_ref() == Some(&key) {
                                 app.focus_node(None);
@@ -414,26 +448,66 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
     app.update_cursor_icon();
     let mut needs_redraw = app.update_hover();
     
+    let mut dropdown_hover = None;
     if let Some(ref focused_key) = app.form.focused {
         if let Some(ref dom) = app.dom {
             if let Some(root) = dom.document_element() {
-                fn is_select_node(node: &std::rc::Rc<dom::Node>, target_key: &str) -> bool {
-                    let key = format!("{:p}", dom::node_ptr(node));
+                fn find_select(node: &std::rc::Rc<toldo_ui_engine::dom::Node>, target_key: &str) -> Option<std::rc::Rc<toldo_ui_engine::dom::Node>> {
+                    let key = format!("{:p}", toldo_ui_engine::dom::node_ptr(node));
                     if key == target_key {
-                        return node.tag_name() == Some("select");
-                    }
-                    for child in &node.children {
-                        if is_select_node(child, target_key) {
-                            return true;
+                        if node.tag_name() == Some("select") {
+                            return Some(node.clone());
                         }
                     }
-                    false
+                    for child in &node.children {
+                        if let Some(n) = find_select(child, target_key) {
+                            return Some(n);
+                        }
+                    }
+                    None
                 }
-                if is_select_node(&root, focused_key) {
-                    needs_redraw = true;
+                if let Some(focused_node) = find_select(&root, focused_key) {
+                    if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
+                        if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
+                            let sw = lr.size.width;
+                            let sh = lr.size.height;
+                            
+                            let mut options = Vec::new();
+                            for child in &focused_node.children {
+                                if child.tag_name() == Some("option") {
+                                    options.push(child.clone());
+                                }
+                            }
+                            
+                            let opt_h = 30.0;
+                            let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(&focused_node)) {
+                                match style.max_height {
+                                    toldo_ui_engine::style::Length::Px(v) => v,
+                                    _ => 7.0 * opt_h,
+                                }
+                            } else {
+                                7.0 * opt_h
+                            };
+                            let total_h = options.len() as f32 * opt_h;
+                            let dropdown_h = total_h.min(max_dropdown_h);
+                            let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
+                            
+                            if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+                                let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
+                                if clicked_idx < options.len() {
+                                    dropdown_hover = Some(clicked_idx);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+    
+    if dropdown_hover != app.last_dropdown_hover {
+        app.last_dropdown_hover = dropdown_hover;
+        needs_redraw = true;
     }
     
     if needs_redraw {

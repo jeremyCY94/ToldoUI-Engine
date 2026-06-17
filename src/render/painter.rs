@@ -123,7 +123,7 @@ impl Painter {
                                     inputs::paint_checkbox(dt, &style, form, &key, x, y, w, h);
                                 }
                                 "radio" => {
-                                    inputs::paint_radio(dt, form, &key, x, y, w, h);
+                                    inputs::paint_radio(dt, &style, form, &key, x, y, w, h);
                                 }
                                 _ => {
                                     inputs::paint_input_text(

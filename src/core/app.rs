@@ -40,6 +40,7 @@ pub(crate) struct App {
     pub(crate) width: f64,
     pub(crate) height: f64,
     pub(crate) modifiers: winit::keyboard::ModifiersState,
+    pub(crate) last_dropdown_hover: Option<usize>,
 }
 
 impl App {
@@ -80,6 +81,7 @@ impl App {
             width: 1024.0,
             height: 768.0,
             modifiers: winit::keyboard::ModifiersState::default(),
+            last_dropdown_hover: None,
         }
     }
 
@@ -178,14 +180,16 @@ impl App {
             if let Some(ref dom) = self.dom {
                 if let Some(root) = dom.document_element() {
                     if let Some(ref ss) = self.stylesheet {
-                        self.styles = style::resolve_styles(ss, root, self.hovered_node, self.form.focused.as_deref());
+                        let new_styles = style::resolve_styles(ss, root, self.hovered_node, self.form.focused.as_deref());
+                        if new_styles != self.styles {
+                            self.styles = new_styles;
+                            return true;
+                        }
                     }
                 }
             }
-            true
-        } else {
-            false
         }
+        false
     }
 
     pub(crate) fn draw(&mut self) {
