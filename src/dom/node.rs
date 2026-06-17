@@ -110,6 +110,13 @@ impl Node {
         text
     }
 
+    pub fn text(&self) -> Option<String> {
+        match &self.node_type {
+            NodeType::Text(t) => Some(t.clone()),
+            _ => None,
+        }
+    }
+
     pub fn add_child(parent: &Rc<Node>, child: &Rc<Node>) {
         child.set_parent(&**parent as *const Node);
         unsafe { (&mut *Rc::as_ptr(&parent).cast_mut()).children.push(child.clone()); }

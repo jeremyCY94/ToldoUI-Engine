@@ -254,8 +254,51 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
 
                 if clicked_dropdown {
                     // Click consumed by dropdown
-                } else if let Some((node, form_type)) = app.hit_test(app.mouse_x, app.mouse_y + app.scroll_y) {
-                    let key = format!("{:p}", dom::node_ptr(&node));
+                } else if let Some((node, mut form_type)) = app.hit_test(app.mouse_x, app.mouse_y + app.scroll_y) {
+                    let mut click_node = node.clone();
+                    
+                    // Walk up to find if there is an ancestor label
+                    let mut label_ancestor = None;
+                    {
+                        let mut curr: *const dom::Node = dom::node_ptr(&node);
+                        unsafe {
+                            while !curr.is_null() {
+                                if (*curr).tag_name() == Some("label") {
+                                    label_ancestor = Some(&*curr);
+                                    break;
+                                }
+                                if let Some(parent) = (*curr).get_parent() {
+                                    curr = parent as *const dom::Node;
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if let Some(label_node) = label_ancestor {
+                        fn find_input_child(n: &dom::Node) -> Option<std::rc::Rc<dom::Node>> {
+                            for child in &n.children {
+                                if child.tag_name() == Some("input") {
+                                    let itype = child.get_attribute("type").unwrap_or("");
+                                    if itype == "checkbox" || itype == "radio" {
+                                        return Some(child.clone());
+                                    }
+                                }
+                                if let Some(found) = find_input_child(child) {
+                                    return Some(found);
+                                }
+                            }
+                            None
+                        }
+                        if let Some(input_node) = find_input_child(label_node) {
+                            let itype = input_node.get_attribute("type").unwrap_or("");
+                            form_type = if itype == "checkbox" { "checkbox" } else { "radio" };
+                            click_node = input_node;
+                        }
+                    }
+                    
+                    let key = format!("{:p}", dom::node_ptr(&click_node));
                     match form_type {
                         "checkbox" => { app.form.toggle(&key); app.focus_node(None); app.click_count = 0; }
                         "radio" => { app.form.toggle(&key); app.focus_node(None); app.click_count = 0; }
