@@ -10,6 +10,7 @@ pub struct FormState {
     pub cursor_pos: HashMap<String, usize>,
     pub selection: HashMap<String, (usize, usize)>, // (start, end)
     pub scroll_x: HashMap<String, f32>,
+    pub dropdown_scroll_y: HashMap<String, f32>,
 }
 
 impl FormState {
@@ -21,6 +22,7 @@ impl FormState {
             cursor_pos: HashMap::new(),
             selection: HashMap::new(),
             scroll_x: HashMap::new(),
+            dropdown_scroll_y: HashMap::new(),
         }
     }
 
@@ -89,5 +91,13 @@ impl FormState {
 
     pub fn set_scroll_x(&mut self, id: &str, val: f32) {
         self.scroll_x.insert(id.to_string(), val);
+    }
+
+    pub fn get_dropdown_scroll_y(&self, id: &str) -> f32 {
+        self.dropdown_scroll_y.get(id).copied().unwrap_or(0.0)
+    }
+
+    pub fn set_dropdown_scroll_y(&mut self, id: &str, val: f32) {
+        self.dropdown_scroll_y.insert(id.to_string(), val);
     }
 }

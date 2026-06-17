@@ -209,7 +209,7 @@ impl App {
         let mut dt = DrawTarget::new(w as i32, h as i32);
         if let Some(ref dom) = self.dom {
             if let Some(root) = dom.document_element() {
-                self.painter.paint(&mut dt, &self.styles, &self.layout, &self.form, root, self.scroll_y, content_h, w as f32, h as f32, self.caret_on);
+                self.painter.paint(&mut dt, &self.styles, &self.layout, &self.form, root, self.scroll_y, content_h, w as f32, h as f32, self.caret_on, self.mouse_x, self.mouse_y);
             }
         }
 
@@ -383,6 +383,35 @@ pub(crate) fn populate_form(dom: &DomTree, form: &mut form::FormState) {
                     if let dom::NodeType::Text(ref t) = child.node_type {
                         form.set_value(&key, t.clone());
                     }
+                }
+            }
+            "select" => {
+                let mut selected_option_key = None;
+                let mut selected_val = None;
+                for child in &node.children {
+                    if child.tag_name() == Some("option") {
+                        let opt_key = format!("{:p}", dom::node_ptr(child));
+                        if child.get_attribute("selected").is_some() {
+                            selected_option_key = Some(opt_key);
+                            selected_val = Some(child.children_text().trim().to_string());
+                        }
+                    }
+                }
+                if selected_val.is_none() {
+                    for child in &node.children {
+                        if child.tag_name() == Some("option") {
+                            let opt_key = format!("{:p}", dom::node_ptr(child));
+                            selected_option_key = Some(opt_key);
+                            selected_val = Some(child.children_text().trim().to_string());
+                            break;
+                        }
+                    }
+                }
+                if let Some(val) = selected_val {
+                    form.set_value(&key, val);
+                }
+                if let Some(opt_key) = selected_option_key {
+                    form.checked.insert(opt_key, true);
                 }
             }
             "option" => {

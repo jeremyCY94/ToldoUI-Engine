@@ -45,7 +45,6 @@ button,
 input,
 textarea,
 select,
-option,
 img,
 picture,
 br,
@@ -153,8 +152,14 @@ button {
 }
 
 select {
-    display: block;
+    display: flex;
+    border: 1px solid rgba(0, 0, 0, 0.171);
+    border-radius: 3px;
+    background-color: rgb(235, 235, 235);
     min-height: 36px;
+    padding-left: 10px;
+    padding-right: 10px;
+    max-height: 180px;
 }
 
 textarea {
@@ -167,7 +172,7 @@ label {
 }
 
 option {
-    display: block;
+    display: none;
 }
 
 blockquote {

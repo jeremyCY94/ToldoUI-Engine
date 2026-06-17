@@ -64,7 +64,32 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, el: &ActiveEventLoop) {
-        if self.form.focused.is_some() {
+        let mut needs_blink = false;
+        if let Some(ref focused_key) = self.form.focused {
+            let mut is_select = false;
+            if let Some(ref dom) = self.dom {
+                if let Some(root) = dom.document_element() {
+                    fn check_is_select(node: &std::rc::Rc<toldo_ui_engine::dom::Node>, target_key: &str) -> bool {
+                        let key = format!("{:p}", toldo_ui_engine::dom::node_ptr(node));
+                        if key == target_key {
+                            return node.tag_name() == Some("select");
+                        }
+                        for child in &node.children {
+                            if check_is_select(child, target_key) {
+                                return true;
+                            }
+                        }
+                        false
+                    }
+                    is_select = check_is_select(&root, focused_key);
+                }
+            }
+            if !is_select {
+                needs_blink = true;
+            }
+        }
+
+        if needs_blink {
             let now = Instant::now();
             let next_blink = self.last_caret_toggle + std::time::Duration::from_millis(500);
             if now >= next_blink {
