@@ -16,6 +16,7 @@ use super::select;
 
 // Re-export methods used by input.rs and app.rs to keep compatibility
 pub use super::text::{index_at_x, x_at_index};
+pub use super::inputs::textarea_index_at_point;
 
 pub struct Painter {
     fonts: HashMap<String, Font<'static>>,
@@ -109,10 +110,20 @@ impl Painter {
                     let w = lr.size.width;
                     let h = lr.size.height;
 
-                    primitives::bg(dt, &style, x, y, w, h);
-                    primitives::border(dt, &style, x, y, w, h);
-
                     let tag = node.tag_name().unwrap_or("");
+                    let itype = if tag == "input" {
+                        node.get_attribute("type").unwrap_or("text")
+                    } else {
+                        ""
+                    };
+
+                    let is_checkbox_or_radio = tag == "input" && (itype == "checkbox" || itype == "radio");
+
+                    if !is_checkbox_or_radio {
+                        primitives::bg(dt, &style, x, y, w, h);
+                        primitives::border(dt, &style, x, y, w, h);
+                    }
+
                     let key = format!("{:p}", ptr);
 
                     match tag {

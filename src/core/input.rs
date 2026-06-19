@@ -350,13 +350,34 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                             let mut start_idx = val.chars().count();
                             let node_ptr = dom::node_ptr(&node);
                             if let Some(root) = app.dom.as_ref().and_then(|d| d.document_element()) {
-                                if let Some((node_x, _)) = get_node_abs_pos(&root, node_ptr, &app.layout, 0.0, 0.0) {
+                                if let Some((node_x, node_y)) = get_node_abs_pos(&root, node_ptr, &app.layout, 0.0, 0.0) {
                                     if let Some(style) = app.styles.get(&node_ptr) {
                                         let padding_left = match style.padding_left { toldo_ui_engine::style::Length::Px(v) => v, _ => 0.0 };
                                         let border_left = style.border.left.width;
                                         let cx = node_x + padding_left + border_left;
                                         let target_x = app.mouse_x - cx;
-                                        start_idx = toldo_ui_engine::render::painter::index_at_x(style, val, target_x);
+                                        
+                                        if form_type == "textarea" {
+                                            let padding_top = match style.padding_top { toldo_ui_engine::style::Length::Px(v) => v, _ => 0.0 };
+                                            let border_top = style.border.top.width;
+                                            let cy = node_y + padding_top + border_top;
+                                            let target_y = app.mouse_y + app.scroll_y - cy;
+                                            
+                                            let padding_right = match style.padding_right { toldo_ui_engine::style::Length::Px(v) => v, _ => 0.0 };
+                                            let border_right = style.border.right.width;
+                                            let node_w = app.layout.get(node_ptr).map(|l| l.size.width).unwrap_or(0.0);
+                                            let max_w = node_w - padding_left - padding_right - border_left - border_right - 2.0;
+                                            
+                                            start_idx = toldo_ui_engine::render::painter::textarea_index_at_point(
+                                                style,
+                                                val,
+                                                target_x,
+                                                target_y,
+                                                max_w,
+                                            );
+                                        } else {
+                                            start_idx = toldo_ui_engine::render::painter::index_at_x(style, val, target_x);
+                                        }
                                     }
                                 }
                             }
@@ -425,14 +446,36 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
         if let Some(node_ptr) = app.dragging_node {
             let key = format!("{:p}", node_ptr);
             if let Some(root) = app.dom.as_ref().and_then(|d| d.document_element()) {
-                if let Some((node_x, _)) = get_node_abs_pos(&root, node_ptr, &app.layout, 0.0, 0.0) {
+                if let Some((node_x, node_y)) = get_node_abs_pos(&root, node_ptr, &app.layout, 0.0, 0.0) {
                     if let Some(style) = app.styles.get(&node_ptr) {
                         let padding_left = match style.padding_left { toldo_ui_engine::style::Length::Px(v) => v, _ => 0.0 };
                         let border_left = style.border.left.width;
                         let cx = node_x + padding_left + border_left;
                         let val = app.form.get_value(&key);
                         let target_x = app.mouse_x - cx;
-                        let current_idx = toldo_ui_engine::render::painter::index_at_x(style, val, target_x);
+                        
+                        let is_textarea = unsafe { (*node_ptr).tag_name() == Some("textarea") };
+                        let current_idx = if is_textarea {
+                            let padding_top = match style.padding_top { toldo_ui_engine::style::Length::Px(v) => v, _ => 0.0 };
+                            let border_top = style.border.top.width;
+                            let cy = node_y + padding_top + border_top;
+                            let target_y = app.mouse_y + app.scroll_y - cy;
+                            
+                            let padding_right = match style.padding_right { toldo_ui_engine::style::Length::Px(v) => v, _ => 0.0 };
+                            let border_right = style.border.right.width;
+                            let node_w = app.layout.get(node_ptr).map(|l| l.size.width).unwrap_or(0.0);
+                            let max_w = node_w - padding_left - padding_right - border_left - border_right - 2.0;
+                            
+                            toldo_ui_engine::render::painter::textarea_index_at_point(
+                                style,
+                                val,
+                                target_x,
+                                target_y,
+                                max_w,
+                            )
+                        } else {
+                            toldo_ui_engine::render::painter::index_at_x(style, val, target_x)
+                        };
 
                         if let Some((start_idx, _)) = app.form.get_selection(&key) {
                             app.form.set_selection(&key, start_idx, current_idx);
