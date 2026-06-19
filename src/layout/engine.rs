@@ -168,6 +168,11 @@ impl LayoutEngine {
 }
 
 fn tex_measure(node: &Node, style: &ComputedStyle) -> (f32, f32) {
+    if let Some(tag) = node.tag_name() {
+        if tag == "textarea" || tag == "input" || tag == "select" || tag == "button" {
+            return (0.0, 0.0);
+        }
+    }
     let mut w = 0.0; let mut lines = 0;
     for child in &node.children {
         if let NodeType::Text(ref t) = child.node_type {

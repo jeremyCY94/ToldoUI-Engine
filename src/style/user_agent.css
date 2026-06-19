@@ -164,7 +164,11 @@ select {
 
 textarea {
     display: block;
-    min-height: 36px;
+    min-height: 120px;
+    min-width: 100%;
+    border: 1px solid rgb(41, 41, 41);
+    padding: 10px;
+    border-radius: 3px;
 }
 
 input[type="checkbox"],

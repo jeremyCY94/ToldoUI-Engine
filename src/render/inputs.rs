@@ -5,7 +5,7 @@ use crate::dom::Node;
 use crate::form::FormState;
 use crate::style::ComputedStyle;
 use super::primitives::lp;
-use super::text::{render_single_line_text, render_text_simple, render_text, x_at_index};
+use super::text::{render_single_line_text, render_text, x_at_index};
 
 pub fn paint_checkbox(
     dt: &mut DrawTarget,
@@ -304,6 +304,199 @@ pub fn paint_input_text(
     dt.pop_clip();
 }
 
+#[derive(Debug)]
+struct LayoutLine {
+    start_idx: usize,
+    text: String,
+}
+
+fn wrap_textarea_text(
+    text: &str,
+    font: &Font<'static>,
+    scale: rusttype::Scale,
+    max_w: f32,
+) -> Vec<LayoutLine> {
+    if max_w <= 0.0 {
+        return vec![LayoutLine {
+            start_idx: 0,
+            text: String::new(),
+        }];
+    }
+
+    let mut lines = Vec::new();
+    let chars: Vec<char> = text.chars().collect();
+    
+    let mut paragraphs = Vec::new();
+    let mut current_paragraph = Vec::new();
+    let mut p_start = 0;
+    
+    for (i, &ch) in chars.iter().enumerate() {
+        if ch == '\n' {
+            paragraphs.push((p_start, current_paragraph.clone()));
+            current_paragraph.clear();
+            p_start = i + 1;
+        } else {
+            current_paragraph.push(ch);
+        }
+    }
+    paragraphs.push((p_start, current_paragraph));
+
+    for (p_start_idx, p_chars) in paragraphs {
+        if p_chars.is_empty() {
+            lines.push(LayoutLine {
+                start_idx: p_start_idx,
+                text: String::new(),
+            });
+            continue;
+        }
+
+        let mut words = Vec::new();
+        let mut word_buf = String::new();
+        let mut word_start = 0;
+        
+        for (idx, &ch) in p_chars.iter().enumerate() {
+            word_buf.push(ch);
+            if ch.is_whitespace() {
+                words.push((word_start, word_buf.clone()));
+                word_buf.clear();
+                word_start = idx + 1;
+            }
+        }
+        if !word_buf.is_empty() {
+            words.push((word_start, word_buf));
+        }
+
+        let mut current_line_text = String::new();
+        let mut current_line_start = p_start_idx;
+        let mut current_line_w = 0.0;
+
+        for (w_offset, word) in words {
+            let word_w: f32 = word.chars().map(|c| font.glyph(c).scaled(scale).h_metrics().advance_width).sum();
+            
+            if word_w > max_w {
+                if !current_line_text.is_empty() {
+                    lines.push(LayoutLine {
+                        start_idx: current_line_start,
+                        text: current_line_text.clone(),
+                    });
+                    current_line_text.clear();
+                    current_line_w = 0.0;
+                }
+                
+                current_line_start = p_start_idx + w_offset;
+                for (ch_idx, ch) in word.chars().enumerate() {
+                    let ch_w = font.glyph(ch).scaled(scale).h_metrics().advance_width;
+                    if current_line_w + ch_w > max_w && !current_line_text.is_empty() {
+                        lines.push(LayoutLine {
+                            start_idx: current_line_start,
+                            text: current_line_text.clone(),
+                        });
+                        current_line_text.clear();
+                        current_line_start = p_start_idx + w_offset + ch_idx;
+                        current_line_w = 0.0;
+                    }
+                    current_line_text.push(ch);
+                    current_line_w += ch_w;
+                }
+            } else {
+                if current_line_w + word_w > max_w && !current_line_text.is_empty() {
+                    lines.push(LayoutLine {
+                        start_idx: current_line_start,
+                        text: current_line_text.clone(),
+                    });
+                    current_line_text = word;
+                    current_line_start = p_start_idx + w_offset;
+                    current_line_w = word_w;
+                } else {
+                    current_line_text.push_str(&word);
+                    current_line_w += word_w;
+                }
+            }
+        }
+        
+        if !current_line_text.is_empty() {
+            lines.push(LayoutLine {
+                start_idx: current_line_start,
+                text: current_line_text,
+            });
+        }
+    }
+    
+    lines
+}
+
+fn get_caret_position(
+    lines: &[LayoutLine],
+    pos: usize,
+    font: &Font<'static>,
+    scale: rusttype::Scale,
+) -> (usize, f32) {
+    if lines.is_empty() {
+        return (0, 0.0);
+    }
+    
+    let mut best_line_idx = 0;
+    for (i, line) in lines.iter().enumerate() {
+        if pos >= line.start_idx {
+            best_line_idx = i;
+        }
+    }
+    
+    let line = &lines[best_line_idx];
+    let offset_chars = pos.saturating_sub(line.start_idx);
+    let mut x_offset = 0.0;
+    for (i, ch) in line.text.chars().enumerate() {
+        if i >= offset_chars {
+            break;
+        }
+        x_offset += font.glyph(ch).scaled(scale).h_metrics().advance_width;
+    }
+    
+    (best_line_idx, x_offset)
+}
+
+pub fn textarea_index_at_point(
+    style: &ComputedStyle,
+    text: &str,
+    target_x: f32,
+    target_y: f32,
+    max_w: f32,
+) -> usize {
+    let fam = if style.font_family.is_empty() { "Arial" } else { &style.font_family };
+    let data = super::text::load_font_data(fam, style.font_weight)
+        .or_else(|| super::text::load_font_data("Arial", style.font_weight))
+        .or_else(|| super::text::load_font_data("sans-serif", style.font_weight));
+    let font = match data.and_then(|d| Font::try_from_vec(d)) {
+        Some(f) => f,
+        None => return (target_x / (style.font_size * 0.6)) as usize,
+    };
+    
+    let scale = rusttype::Scale::uniform(style.font_size);
+    let lh = style.font_size * 1.4;
+    
+    let lines = wrap_textarea_text(text, &font, scale, max_w);
+    if lines.is_empty() {
+        return 0;
+    }
+    
+    let clicked_line_idx = (target_y / lh).max(0.0) as usize;
+    let line_idx = clicked_line_idx.min(lines.len() - 1);
+    let line = &lines[line_idx];
+    
+    let mut current_x = 0.0;
+    for (i, ch) in line.text.chars().enumerate() {
+        let aw = font.glyph(ch).scaled(scale).h_metrics().advance_width;
+        if target_x < current_x + aw * 0.5 {
+            return line.start_idx + i;
+        }
+        current_x += aw;
+        if target_x < current_x {
+            return line.start_idx + i + 1;
+        }
+    }
+    line.start_idx + line.text.chars().count()
+}
+
 pub fn paint_textarea(
     dt: &mut DrawTarget,
     fonts: &mut HashMap<String, Font<'static>>,
@@ -313,35 +506,150 @@ pub fn paint_textarea(
     x: f32,
     y: f32,
     w: f32,
-    _h: f32,
+    h: f32,
     caret_on: bool,
 ) {
     let cx = x + lp(&style.padding_left) + style.border.left.width;
-    let val = form.get_value(key);
     let cy = y + lp(&style.padding_top) + style.border.top.width;
     let aw = w - lp(&style.padding_left) - lp(&style.padding_right) - style.border.left.width - style.border.right.width;
+    let ah = h - lp(&style.padding_top) - lp(&style.padding_bottom) - style.border.top.width - style.border.bottom.width;
+    
+    if aw <= 0.0 || ah <= 0.0 {
+        return;
+    }
+
+    let focused = form.focused.as_ref().map_or(false, |f| f == key);
+    
+    // Draw the focus border
+    if focused {
+        let fc = SolidSource::from_unpremultiplied_argb(255, 50, 130, 250);
+        let r = lp(&style.border_radius).min(w * 0.5).min(h * 0.5);
+        if r > 0.0 {
+            let bw = 2.0;
+            let half_bw = bw * 0.5;
+            let bx = x + half_bw;
+            let by = y + half_bw;
+            let bw_inner = w - bw;
+            let bh_inner = h - bw;
+            let br = (r - half_bw).max(0.0);
+
+            let mut pb = PathBuilder::new();
+            pb.move_to(bx + br, by);
+            pb.line_to(bx + bw_inner - br, by);
+            pb.quad_to(bx + bw_inner, by, bx + bw_inner, by + br);
+            pb.line_to(bx + bw_inner, by + bh_inner - br);
+            pb.quad_to(bx + bw_inner, by + bh_inner, bx + bw_inner - br, by + bh_inner);
+            pb.line_to(bx + br, by + bh_inner);
+            pb.quad_to(bx, by + bh_inner, bx, by + bh_inner - br);
+            pb.line_to(bx, by + br);
+            pb.quad_to(bx, by, bx + br, by);
+            pb.close();
+            let path = pb.finish();
+
+            let stroke_style = StrokeStyle {
+                width: bw,
+                cap: LineCap::Butt,
+                join: LineJoin::Miter,
+                miter_limit: 10.0,
+                dash_array: Vec::new(),
+                dash_offset: 0.0,
+            };
+            dt.stroke(&path, &Source::Solid(fc), &stroke_style, &DrawOptions::new());
+        } else {
+            dt.fill_rect(x, y, 2.0, h, &Source::Solid(fc), &DrawOptions::new());
+            dt.fill_rect(x + w - 2.0, y, 2.0, h, &Source::Solid(fc), &DrawOptions::new());
+            dt.fill_rect(x, y, w, 2.0, &Source::Solid(fc), &DrawOptions::new());
+            dt.fill_rect(x, y + h - 2.0, w, 2.0, &Source::Solid(fc), &DrawOptions::new());
+        }
+    }
+
+    let val = form.get_value(key);
+    
+    // Load font
+    let font = super::text::load_font(fonts, &style.font_family, style.font_weight)
+        .or_else(|| super::text::load_font(fonts, "Arial", style.font_weight))
+        .or_else(|| super::text::load_font(fonts, "sans-serif", style.font_weight));
+    let font = match font {
+        Some(f) => f,
+        None => return,
+    };
+    
+    let scale = rusttype::Scale::uniform(style.font_size);
+    let vm = font.v_metrics(scale);
+    let ascent = vm.ascent;
+    let lh = style.font_size * 1.4;
+
+    // Wrap text into layout lines
+    let lines = wrap_textarea_text(val, &font, scale, aw - 2.0);
+
+    // Push clip rect to keep rendering inside content bounds
+    dt.push_clip_rect(IntRect::new(
+        IntPoint::new((cx) as i32, (cy) as i32),
+        IntPoint::new((cx + aw) as i32, (cy + ah) as i32),
+    ));
+
+    // Render selection highlight
     if let Some((start_idx, end_idx)) = form.get_selection(key) {
         if start_idx != end_idx {
             let s_min = start_idx.min(end_idx);
             let s_max = start_idx.max(end_idx);
-            let sel_x1 = cx + 1.0 + x_at_index(style, val, s_min);
-            let sel_x2 = cx + 1.0 + x_at_index(style, val, s_max);
-            let sel_w = (sel_x2 - sel_x1).min(x + w - sel_x1 - 2.0).max(0.0);
-            let sel_col = SolidSource::from_unpremultiplied_argb(100, 50, 130, 250);
-            dt.fill_rect(sel_x1, cy + 1.0, sel_w, style.font_size + 4.0, &Source::Solid(sel_col), &DrawOptions::new());
+            
+            for (line_idx, line) in lines.iter().enumerate() {
+                let line_len = line.text.chars().count();
+                let line_end = line.start_idx + line_len;
+                let line_y = cy + 1.0 + line_idx as f32 * lh;
+                
+                let sel_line_start = s_min.max(line.start_idx);
+                let sel_line_end = s_max.min(line_end + 1);
+                
+                if sel_line_start < sel_line_end {
+                    let offset_start = sel_line_start - line.start_idx;
+                    let offset_end = (sel_line_end - line.start_idx).min(line_len);
+                    
+                    let mut sel_x1 = 0.0;
+                    for ch in line.text.chars().take(offset_start) {
+                        sel_x1 += font.glyph(ch).scaled(scale).h_metrics().advance_width;
+                    }
+                    
+                    let mut sel_x2 = sel_x1;
+                    for ch in line.text.chars().skip(offset_start).take(offset_end - offset_start) {
+                        sel_x2 += font.glyph(ch).scaled(scale).h_metrics().advance_width;
+                    }
+                    
+                    if sel_line_end > line_end {
+                        sel_x2 += 8.0;
+                    }
+                    
+                    let x_draw = cx + 1.0 + sel_x1;
+                    let w_draw = (sel_x2 - sel_x1).min(cx + aw - x_draw).max(0.0);
+                    let sel_col = SolidSource::from_unpremultiplied_argb(100, 50, 130, 250);
+                    dt.fill_rect(x_draw, line_y, w_draw, lh, &Source::Solid(sel_col), &DrawOptions::new());
+                }
+            }
         }
     }
-    if !val.is_empty() || form.focused.as_ref().map_or(false, |f| f == key) {
-        let col = SolidSource::from_unpremultiplied_argb(200, 80, 80, 80);
-        render_text_simple(dt, fonts, style, val, cx + 1.0, cy + 1.0, aw - 2.0, col);
+
+    // Render text lines
+    let text_color = SolidSource::from_unpremultiplied_argb(200, 80, 80, 80);
+    for (line_idx, line) in lines.iter().enumerate() {
+        let line_y = cy + 1.0 + line_idx as f32 * lh;
+        if !line.text.is_empty() {
+            super::text::draw_text_line(dt, &font, scale, &line.text, cx + 1.0, line_y + ascent, text_color);
+        }
     }
-    if form.focused.as_ref().map_or(false, |f| f == key) && caret_on && !form.is_selected(key) {
+
+    // Render caret
+    if focused && caret_on && !form.is_selected(key) {
         let pos = form.cursor(key);
-        let tw = x_at_index(style, val, pos);
-        let cx2 = cx + 1.0 + tw.min(aw - 2.0);
+        let (caret_line_idx, caret_x_offset) = get_caret_position(&lines, pos, &font, scale);
+        
+        let caret_y = cy + 1.0 + caret_line_idx as f32 * lh;
+        let cx2 = cx + 1.0 + caret_x_offset.min(aw - 2.0);
         let caret_color = SolidSource::from_unpremultiplied_argb(255, 50, 50, 50);
-        dt.fill_rect(cx2, cy + 1.0, 1.5, style.font_size + 4.0, &Source::Solid(caret_color), &DrawOptions::new());
+        dt.fill_rect(cx2, caret_y, 1.5, lh, &Source::Solid(caret_color), &DrawOptions::new());
     }
+
+    dt.pop_clip();
 }
 
 pub fn paint_button(

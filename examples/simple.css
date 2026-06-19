@@ -211,9 +211,24 @@ form label {
 
 input,
 select,
-textarea,
+textarea {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  width: 100%;
+}
 
-
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  min-width: 18px;
+  min-height: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+}
 
 .radio-group {
   display: flex;
