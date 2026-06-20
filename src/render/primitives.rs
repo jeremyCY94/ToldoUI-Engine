@@ -8,11 +8,19 @@ pub fn lp(l: &Length) -> f32 {
     }
 }
 
+pub fn resolve_lp(l: &Length, reference: f32) -> f32 {
+    match l {
+        Length::Px(v) => *v,
+        Length::Percent(p) => *p * reference,
+        _ => 0.0,
+    }
+}
+
 pub fn bg(dt: &mut DrawTarget, s: &ComputedStyle, x: f32, y: f32, w: f32, h: f32) {
     if w <= 0.0 || h <= 0.0 {
         return;
     }
-    let r = lp(&s.border_radius).min(w * 0.5).min(h * 0.5);
+    let r = resolve_lp(&s.border_radius, w.min(h)).min(w * 0.5).min(h * 0.5);
 
     if r > 0.0 {
         let mut pb = PathBuilder::new();
@@ -93,7 +101,7 @@ pub fn bg(dt: &mut DrawTarget, s: &ComputedStyle, x: f32, y: f32, w: f32, h: f32
 pub fn border(dt: &mut DrawTarget, s: &ComputedStyle, x: f32, y: f32, w: f32, h: f32) {
     let opts = DrawOptions::new();
     let b = &s.border;
-    let r = lp(&s.border_radius).min(w * 0.5).min(h * 0.5);
+    let r = resolve_lp(&s.border_radius, w.min(h)).min(w * 0.5).min(h * 0.5);
 
     if r > 0.0 {
         let bw = b.top.width;

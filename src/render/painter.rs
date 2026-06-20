@@ -19,14 +19,22 @@ use super::overlay;
 pub use super::text::{index_at_x, x_at_index};
 pub use super::inputs::textarea_index_at_point;
 
+pub struct LoadedImage {
+    pub width: i32,
+    pub height: i32,
+    pub pixels: Vec<u32>,
+}
+
 pub struct Painter {
     fonts: HashMap<String, Font<'static>>,
+    image_cache: HashMap<String, LoadedImage>,
 }
 
 impl Painter {
     pub fn new() -> Self {
         Painter {
             fonts: HashMap::new(),
+            image_cache: HashMap::new(),
         }
     }
 
@@ -225,6 +233,84 @@ impl Painter {
                                 caret_on,
                             );
                         }
+                        "img" => {
+                            if let Some(src) = node.get_attribute("src") {
+                                if let Some(img) = self.get_or_load_image(src) {
+                                    let image = raqote::Image {
+                                        width: img.width,
+                                        height: img.height,
+                                        data: &img.pixels,
+                                    };
+                                    let r = primitives::resolve_lp(&style.border_radius, w.min(h)).min(w * 0.5).min(h * 0.5);
+                                    let has_clip = r > 0.0;
+                                    if has_clip {
+                                        let mut pb = PathBuilder::new();
+                                        pb.move_to(x + r, y);
+                                        pb.line_to(x + w - r, y);
+                                        pb.quad_to(x + w, y, x + w, y + r);
+                                        pb.line_to(x + w, y + h - r);
+                                        pb.quad_to(x + w, y + h, x + w - r, y + h);
+                                        pb.line_to(x + r, y + h);
+                                        pb.quad_to(x, y + h, x, y + h - r);
+                                        pb.line_to(x, y + r);
+                                        pb.quad_to(x, y, x + r, y);
+                                        pb.close();
+                                        dt.push_clip(&pb.finish());
+                                    }
+                                    dt.draw_image_with_size_at(w, h, x, y, &image, &DrawOptions::new());
+                                    if has_clip {
+                                        dt.pop_clip();
+                                    }
+                                } else {
+                                    let mut pb = PathBuilder::new();
+                                    let r = primitives::resolve_lp(&style.border_radius, w.min(h)).min(w * 0.5).min(h * 0.5);
+                                    if r > 0.0 {
+                                        pb.move_to(x + r, y);
+                                        pb.line_to(x + w - r, y);
+                                        pb.quad_to(x + w, y, x + w, y + r);
+                                        pb.line_to(x + w, y + h - r);
+                                        pb.quad_to(x + w, y + h, x + w - r, y + h);
+                                        pb.line_to(x + r, y + h);
+                                        pb.quad_to(x, y + h, x, y + h - r);
+                                        pb.line_to(x, y + r);
+                                        pb.quad_to(x, y, x + r, y);
+                                        pb.close();
+                                        let path = pb.finish();
+                                        dt.fill(&path, &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 240, 240, 240)), &DrawOptions::new());
+                                        let stroke_style = StrokeStyle {
+                                            width: 1.0,
+                                            cap: LineCap::Butt,
+                                            join: LineJoin::Miter,
+                                            miter_limit: 10.0,
+                                            dash_array: vec![4.0, 4.0],
+                                            dash_offset: 0.0,
+                                        };
+                                        dt.stroke(&path, &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 180, 180, 180)), &stroke_style, &DrawOptions::new());
+                                    } else {
+                                        dt.fill_rect(x, y, w, h, &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 240, 240, 240)), &DrawOptions::new());
+                                        pb.rect(x, y, w, h);
+                                        let path = pb.finish();
+                                        let stroke_style = StrokeStyle {
+                                            width: 1.0,
+                                            cap: LineCap::Butt,
+                                            join: LineJoin::Miter,
+                                            miter_limit: 10.0,
+                                            dash_array: vec![4.0, 4.0],
+                                            dash_offset: 0.0,
+                                        };
+                                        dt.stroke(&path, &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 180, 180, 180)), &stroke_style, &DrawOptions::new());
+                                    }
+                                    let mut font_style = style.clone();
+                                    font_style.font_size = 11.0;
+                                    font_style.color = crate::style::Color::new(120, 120, 120, 255);
+                                    let err_text = format!("Error: {}", src);
+                                    let tw = text::x_at_index(&font_style, &err_text, err_text.chars().count());
+                                    let tx = x + (w - tw) * 0.5;
+                                    let ty = y + (h - font_style.font_size) * 0.5;
+                                    text::render_text(dt, &mut self.fonts, &font_style, &err_text, tx.max(x + 4.0), ty, w - 8.0);
+                                }
+                            }
+                        }
                         _ => {
                             let pt2 = primitives::lp(&style.padding_top);
                             let bt2 = style.border.top.width;
@@ -273,4 +359,39 @@ impl Painter {
             NodeType::Text(_) => {}
         }
     }
+
+    fn get_or_load_image(&mut self, src: &str) -> Option<&LoadedImage> {
+        if !self.image_cache.contains_key(src) {
+            let loaded = load_image_file(src);
+            if let Some(img) = loaded {
+                self.image_cache.insert(src.to_string(), img);
+            } else {
+                return None;
+            }
+        }
+        self.image_cache.get(src)
+    }
+}
+
+fn load_image_file(src: &str) -> Option<LoadedImage> {
+    let img = image::open(src).ok()?.to_rgba8();
+    let (width, height) = img.dimensions();
+    let pixels: Vec<u32> = img
+        .pixels()
+        .map(|p| {
+            let r = p[0] as u32;
+            let g = p[1] as u32;
+            let b = p[2] as u32;
+            let a = p[3] as u32;
+            let r = (r * a) / 255;
+            let g = (g * a) / 255;
+            let b = (b * a) / 255;
+            (a << 24) | (r << 16) | (g << 8) | b
+        })
+        .collect();
+    Some(LoadedImage {
+        width: width as i32,
+        height: height as i32,
+        pixels,
+    })
 }
