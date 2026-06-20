@@ -25,10 +25,11 @@ impl ApplicationHandler for App {
         let size = window.inner_size();
         self.surface.as_mut().unwrap().resize(NonZero::new(size.width).unwrap(), NonZero::new(size.height).unwrap()).unwrap();
         
-        // Cargar el HTML/CSS de arranque síncronamente
-        if let (Some(html), Some(css)) = (self.initial_html.clone(), self.initial_css.clone()) {
-            self.load(&html, &css);
-        }
+        // Iniciar en estado loading y con dom en None para pintar el Skeleton en el primer frame
+        self.loading = true;
+        self.dom = None;
+        self.hovered_node = None;
+        self.dragging_node = None;
         window.request_redraw();
     }
 

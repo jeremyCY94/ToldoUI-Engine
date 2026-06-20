@@ -53,6 +53,7 @@ impl Painter {
         mouse_x: f32,
         mouse_y: f32,
         dragging_scrollbar: bool,
+        loading: bool,
         modal: &Option<overlay::ModalState>,
     ) {
         dt.clear(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255));
@@ -120,6 +121,10 @@ impl Painter {
             mouse_x,
             mouse_y,
         );
+
+        if loading {
+            overlay::paint_loading_overlay(dt, vw, vh);
+        }
 
         if let Some(m) = modal {
             overlay::paint_modal_overlay(dt, &mut self.fonts, m, vw, vh, mouse_x, mouse_y);

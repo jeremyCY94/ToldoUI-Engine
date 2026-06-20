@@ -16,7 +16,45 @@ pub struct ModalState {
     pub action: String,
 }
 
+pub fn paint_loading_overlay(dt: &mut DrawTarget, vw: f32, vh: f32) {
+    // 1. Fondo de la página en un gris muy claro (Slate-50)
+    let bg_color = SolidSource::from_unpremultiplied_argb(255, 248, 250, 252);
+    dt.fill_rect(0.0, 0.0, vw, vh, &Source::Solid(bg_color), &DrawOptions::new());
 
+    // 2. Opacidad estática de gris medio (sin animación)
+    let alpha = 140;
+
+    // Colores para los elementos del Skeleton
+    let skeleton_color = Source::Solid(SolidSource::from_unpremultiplied_argb(alpha, 226, 232, 240)); // Slate-200
+    let skeleton_color_dark = Source::Solid(SolidSource::from_unpremultiplied_argb(alpha, 203, 213, 225)); // Slate-300
+
+    // 3. NAVBAR SUPERIOR MINIMALISTA
+    let nav_bg = SolidSource::from_unpremultiplied_argb(255, 255, 255, 255);
+    dt.fill_rect(0.0, 0.0, vw, 56.0, &Source::Solid(nav_bg), &DrawOptions::new());
+    let nav_border = SolidSource::from_unpremultiplied_argb(255, 241, 245, 249);
+    dt.fill_rect(0.0, 55.0, vw, 1.0, &Source::Solid(nav_border), &DrawOptions::new());
+
+    // 4. ELEMENTOS DE CONTENIDO LIGEROS
+    // Título principal
+    let mut pb_title = PathBuilder::new();
+    draw_rounded_rect_path(&mut pb_title, 40.0, 88.0, 220.0, 24.0, 4.0);
+    dt.fill(&pb_title.finish(), &skeleton_color_dark, &DrawOptions::new());
+
+    // Barra de texto 1
+    let mut pb_line1 = PathBuilder::new();
+    draw_rounded_rect_path(&mut pb_line1, 40.0, 130.0, vw - 80.0, 12.0, 3.0);
+    dt.fill(&pb_line1.finish(), &skeleton_color, &DrawOptions::new());
+
+    // Barra de texto 2
+    let mut pb_line2 = PathBuilder::new();
+    draw_rounded_rect_path(&mut pb_line2, 40.0, 150.0, (vw - 80.0) * 0.8, 12.0, 3.0);
+    dt.fill(&pb_line2.finish(), &skeleton_color, &DrawOptions::new());
+
+    // Bloque de contenido principal grande
+    let mut pb_panel = PathBuilder::new();
+    draw_rounded_rect_path(&mut pb_panel, 40.0, 186.0, vw - 80.0, (vh - 226.0).max(100.0), 8.0);
+    dt.fill(&pb_panel.finish(), &skeleton_color, &DrawOptions::new());
+}
 
 pub fn paint_modal_overlay(
     dt: &mut DrawTarget,

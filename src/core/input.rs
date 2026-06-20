@@ -13,6 +13,18 @@ pub(crate) fn handle_keyboard(app: &mut App, event: winit::event::KeyEvent) {
         return;
     }
     if event.state == ElementState::Pressed {
+        // Recarga global con F5
+        if event.logical_key == Key::Named(NamedKey::F5) {
+            app.loading = true;
+            app.dom = None;
+            app.hovered_node = None;
+            app.dragging_node = None;
+            if let Some(w) = &app.window {
+                w.request_redraw();
+            }
+            return;
+        }
+
         if event.logical_key == Key::Named(NamedKey::Tab) {
             let focusables = app.get_focusable_nodes();
             if !focusables.is_empty() {
@@ -235,12 +247,7 @@ pub(crate) fn handle_keyboard(app: &mut App, event: winit::event::KeyEvent) {
                     app.scroll_y = (app.scroll_y + 300.0).clamp(0.0, max_scroll);
                     if let Some(w) = &app.window { w.request_redraw(); }
                 }
-                Key::Character(c) if c == "r" || c == "R" => {
-                    if let (Some(html), Some(css)) = (app.initial_html.clone(), app.initial_css.clone()) {
-                        app.load(&html, &css);
-                    }
-                    if let Some(w) = &app.window { w.request_redraw(); }
-                }
+
                 _ => {}
             }
         }
