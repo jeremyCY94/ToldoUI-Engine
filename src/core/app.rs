@@ -10,7 +10,7 @@ use toldo_ui_engine::style::{self, StyleMap};
 use toldo_ui_engine::layout;
 use toldo_ui_engine::render;
 use toldo_ui_engine::form;
-use toldo_ui_engine::render::overlay::{ModalState, ModalType};
+use toldo_ui_engine::render::overlay::ModalState;
 
 pub struct EventListener {
     pub selector: String,
@@ -51,12 +51,10 @@ pub(crate) struct App {
     pub(crate) last_layout_height: u32,
     pub(crate) layout_dirty: bool,
     pub(crate) draw_target: Option<DrawTarget>,
-    pub(crate) loading: bool,
-    pub(crate) loading_spinner_angle: f32,
+
     pub(crate) modal: Option<ModalState>,
     pub(crate) click_listeners: Vec<EventListener>,
-    pub(crate) deferred_load: Option<(std::time::Instant, String, String)>,
-    pub(crate) deferred_action: Option<(std::time::Instant, String)>,
+
 }
 
 impl App {
@@ -102,12 +100,10 @@ impl App {
             last_layout_height: 0,
             layout_dirty: true,
             draw_target: None,
-            loading: true,
-            loading_spinner_angle: 0.0,
+
             modal: None,
             click_listeners: Vec::new(),
-            deferred_load: None,
-            deferred_action: None,
+
         }
     }
 
@@ -271,36 +267,9 @@ impl App {
             }
         }
 
-        // Comprobar si hay una carga de HTML diferida
-        if let Some((time, html, css)) = self.deferred_load.clone() {
-            if std::time::Instant::now() >= time {
-                self.deferred_load = None;
-                self.load(&html, &css);
-            }
-        }
 
-        // Comprobar si hay una acción diferida
-        if let Some((time, action)) = self.deferred_action.clone() {
-            if std::time::Instant::now() >= time {
-                self.deferred_action = None;
-                if action == "submit_success" {
-                    if let (Some(html), Some(css)) = (self.initial_html.clone(), self.initial_css.clone()) {
-                        self.load(&html, &css);
-                    }
-                    self.modal = Some(ModalState {
-                        title: "Formulario Enviado".to_string(),
-                        message: "¡Los datos se han procesado correctamente y la operación fue un éxito!".to_string(),
-                        modal_type: ModalType::Alert,
-                        action: "submit_success".to_string(),
-                    });
-                    self.layout_dirty = true;
-                }
-            }
-        }
 
-        if self.loading {
-            self.loading_spinner_angle = (self.loading_spinner_angle + 0.15) % std::f32::consts::TAU;
-        }
+
 
         if self.draw_target.is_none()
             || self.draw_target.as_ref().unwrap().width() != w as i32
@@ -331,8 +300,6 @@ impl App {
             self.mouse_x,
             self.mouse_y,
             self.dragging_scrollbar,
-            self.loading,
-            self.loading_spinner_angle,
             &self.modal,
         );
 
@@ -348,14 +315,7 @@ impl App {
             buf.present().unwrap();
         }
 
-        // Desactivar el loading automáticamente una vez que el DOM está listo y se ha dibujado
-        if self.loading && self.dom.is_some() && self.deferred_load.is_none() && self.deferred_action.is_none() {
-            self.loading = false;
-            self.layout_dirty = true;
-            if let Some(ref w) = self.window {
-                w.request_redraw();
-            }
-        }
+
     }
 
     pub(crate) fn hit_test(&self, mx: f32, my: f32) -> Option<(std::rc::Rc<dom::Node>, &'static str)> {

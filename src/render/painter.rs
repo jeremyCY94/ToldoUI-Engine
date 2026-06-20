@@ -53,8 +53,6 @@ impl Painter {
         mouse_x: f32,
         mouse_y: f32,
         dragging_scrollbar: bool,
-        loading: bool,
-        spinner_angle: f32,
         modal: &Option<overlay::ModalState>,
     ) {
         dt.clear(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255));
@@ -122,10 +120,6 @@ impl Painter {
             mouse_x,
             mouse_y,
         );
-
-        if loading {
-            overlay::paint_loading_overlay(dt, vw, vh, spinner_angle);
-        }
 
         if let Some(m) = modal {
             overlay::paint_modal_overlay(dt, &mut self.fonts, m, vw, vh, mouse_x, mouse_y);
@@ -235,7 +229,9 @@ impl Painter {
                         }
                         "img" => {
                             if let Some(src) = node.get_attribute("src") {
-                                if let Some(img) = self.get_or_load_image(src) {
+                                let target_w = w.max(1.0) as u32;
+                                let target_h = h.max(1.0) as u32;
+                                if let Some(img) = self.get_or_load_image(src, target_w, target_h) {
                                     let image = raqote::Image {
                                         width: img.width,
                                         height: img.height,
@@ -360,23 +356,26 @@ impl Painter {
         }
     }
 
-    fn get_or_load_image(&mut self, src: &str) -> Option<&LoadedImage> {
-        if !self.image_cache.contains_key(src) {
-            let loaded = load_image_file(src);
+    fn get_or_load_image(&mut self, src: &str, target_w: u32, target_h: u32) -> Option<&LoadedImage> {
+        let cache_key = format!("{}_{}_{}", src, target_w, target_h);
+        if !self.image_cache.contains_key(&cache_key) {
+            let loaded = load_image_file(src, target_w, target_h);
             if let Some(img) = loaded {
-                self.image_cache.insert(src.to_string(), img);
+                self.image_cache.insert(cache_key.clone(), img);
             } else {
                 return None;
             }
         }
-        self.image_cache.get(src)
+        self.image_cache.get(&cache_key)
     }
 }
 
-fn load_image_file(src: &str) -> Option<LoadedImage> {
-    let img = image::open(src).ok()?.to_rgba8();
-    let (width, height) = img.dimensions();
-    let pixels: Vec<u32> = img
+fn load_image_file(src: &str, target_w: u32, target_h: u32) -> Option<LoadedImage> {
+    let img = image::open(src).ok()?;
+    let img_resized = img.resize(target_w, target_h, image::imageops::FilterType::Triangle);
+    let img_rgba = img_resized.to_rgba8();
+    let (width, height) = img_rgba.dimensions();
+    let pixels: Vec<u32> = img_rgba
         .pixels()
         .map(|p| {
             let r = p[0] as u32;

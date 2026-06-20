@@ -4,7 +4,7 @@ use winit::dpi::PhysicalPosition;
 
 use toldo_ui_engine::dom;
 use toldo_ui_engine::form::actions::{delete_selected_text, get_selected_text, insert_text};
-use toldo_ui_engine::render::overlay::ModalType;
+use toldo_ui_engine::render::overlay::{ModalState, ModalType};
 
 use crate::core::app::{App, get_node_abs_pos};
 
@@ -236,11 +236,8 @@ pub(crate) fn handle_keyboard(app: &mut App, event: winit::event::KeyEvent) {
                     if let Some(w) = &app.window { w.request_redraw(); }
                 }
                 Key::Character(c) if c == "r" || c == "R" => {
-                    // Activar el skeleton loader e iniciar la carga diferida
-                    app.loading = true;
-                    app.dom = None;
                     if let (Some(html), Some(css)) = (app.initial_html.clone(), app.initial_css.clone()) {
-                        app.deferred_load = Some((std::time::Instant::now() + std::time::Duration::from_millis(800), html, css));
+                        app.load(&html, &css);
                     }
                     if let Some(w) = &app.window { w.request_redraw(); }
                 }
@@ -271,10 +268,15 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
 
             if app.mouse_x >= accept_x && app.mouse_x < accept_x + btn_w && app.mouse_y >= btn_y && app.mouse_y < btn_y + btn_h {
                 if modal.action == "confirm_submit" {
-                    app.loading = true;
-                    app.dom = None;
-                    app.deferred_action = Some((std::time::Instant::now() + std::time::Duration::from_secs(2), "submit_success".to_string()));
-                    app.modal = None;
+                    if let (Some(html), Some(css)) = (app.initial_html.clone(), app.initial_css.clone()) {
+                        app.load(&html, &css);
+                    }
+                    app.modal = Some(ModalState {
+                        title: "Formulario Enviado".to_string(),
+                        message: "¡Los datos se han procesado correctamente y la operación fue un éxito!".to_string(),
+                        modal_type: ModalType::Alert,
+                        action: "submit_success".to_string(),
+                    });
                     app.focus_node(None);
                 } else {
                     app.modal = None;
