@@ -43,19 +43,59 @@ impl Painter {
         caret_on: bool,
         mouse_x: f32,
         mouse_y: f32,
+        dragging_scrollbar: bool,
     ) {
         dt.clear(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255));
         self.paint_node(dt, styles, layout, form, &root, 0.0, -scroll_y, caret_on);
         if content_h > vh {
-            let sb_w = 10.0;
-            let sb_x = vw - sb_w - 2.0;
-            let track_h = vh - 4.0;
-            let thumb_h = (vh / content_h * track_h).max(20.0);
-            let thumb_y = 2.0 + (scroll_y / (content_h - vh)) * (track_h - thumb_h);
-            let src = SolidSource::from_unpremultiplied_argb(40, 0, 0, 0);
-            dt.fill_rect(sb_x, 2.0, sb_w, track_h, &Source::Solid(src), &DrawOptions::new());
-            let src2 = SolidSource::from_unpremultiplied_argb(120, 0, 0, 0);
-            dt.fill_rect(sb_x, thumb_y, sb_w, thumb_h, &Source::Solid(src2), &DrawOptions::new());
+            let sb_w = 8.0;
+            let sb_x = vw - sb_w - 4.0;
+            let track_h = vh - 8.0;
+            let thumb_h = (vh / content_h * track_h).max(30.0);
+            let thumb_y = 4.0 + (scroll_y / (content_h - vh)) * (track_h - thumb_h);
+
+            let is_hovered = mouse_x >= sb_x - 4.0 && mouse_x <= vw && mouse_y >= 0.0 && mouse_y <= vh;
+
+            let mut pb_track = PathBuilder::new();
+            let r = sb_w * 0.5;
+            pb_track.move_to(sb_x + r, 4.0);
+            pb_track.line_to(sb_x + sb_w - r, 4.0);
+            pb_track.quad_to(sb_x + sb_w, 4.0, sb_x + sb_w, 4.0 + r);
+            pb_track.line_to(sb_x + sb_w, 4.0 + track_h - r);
+            pb_track.quad_to(sb_x + sb_w, 4.0 + track_h, sb_x + sb_w - r, 4.0 + track_h);
+            pb_track.line_to(sb_x + r, 4.0 + track_h);
+            pb_track.quad_to(sb_x, 4.0 + track_h, sb_x, 4.0 + track_h - r);
+            pb_track.line_to(sb_x, 4.0 + r);
+            pb_track.quad_to(sb_x, 4.0, sb_x + r, 4.0);
+            pb_track.close();
+            let path_track = pb_track.finish();
+
+            let track_alpha = if is_hovered || dragging_scrollbar { 25 } else { 8 };
+            let track_color = SolidSource::from_unpremultiplied_argb(track_alpha, 0, 0, 0);
+            dt.fill(&path_track, &Source::Solid(track_color), &DrawOptions::new());
+
+            let mut pb_thumb = PathBuilder::new();
+            pb_thumb.move_to(sb_x + r, thumb_y);
+            pb_thumb.line_to(sb_x + sb_w - r, thumb_y);
+            pb_thumb.quad_to(sb_x + sb_w, thumb_y, sb_x + sb_w, thumb_y + r);
+            pb_thumb.line_to(sb_x + sb_w, thumb_y + thumb_h - r);
+            pb_thumb.quad_to(sb_x + sb_w, thumb_y + thumb_h, sb_x + sb_w - r, thumb_y + thumb_h);
+            pb_thumb.line_to(sb_x + r, thumb_y + thumb_h);
+            pb_thumb.quad_to(sb_x, thumb_y + thumb_h, sb_x, thumb_y + thumb_h - r);
+            pb_thumb.line_to(sb_x, thumb_y + r);
+            pb_thumb.quad_to(sb_x, thumb_y, sb_x + r, thumb_y);
+            pb_thumb.close();
+            let path_thumb = pb_thumb.finish();
+
+            let thumb_alpha = if dragging_scrollbar {
+                135
+            } else if is_hovered {
+                95
+            } else {
+                55
+            };
+            let thumb_color = SolidSource::from_unpremultiplied_argb(thumb_alpha, 0, 0, 0);
+            dt.fill(&path_thumb, &Source::Solid(thumb_color), &DrawOptions::new());
         }
 
         // Draw the select dropdown overlay if a select is focused

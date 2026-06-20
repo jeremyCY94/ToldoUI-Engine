@@ -9,6 +9,84 @@ use crate::core::app::{App, get_node_abs_pos};
 
 pub(crate) fn handle_keyboard(app: &mut App, event: winit::event::KeyEvent) {
     if event.state == ElementState::Pressed {
+        if event.logical_key == Key::Named(NamedKey::Tab) {
+            let focusables = app.get_focusable_nodes();
+            if !focusables.is_empty() {
+                let shift_pressed = app.modifiers.shift_key();
+                let next_idx = match &app.form.focused {
+                    Some(curr_focused) => {
+                        if let Some(idx) = focusables.iter().position(|k| k == curr_focused) {
+                            if shift_pressed {
+                                if idx == 0 {
+                                    focusables.len() - 1
+                                } else {
+                                    idx - 1
+                                }
+                            } else {
+                                (idx + 1) % focusables.len()
+                            }
+                        } else {
+                            if shift_pressed { focusables.len() - 1 } else { 0 }
+                        }
+                    }
+                    None => {
+                        if shift_pressed { focusables.len() - 1 } else { 0 }
+                    }
+                };
+
+                let new_key = focusables[next_idx].clone();
+                app.focus_node(Some(new_key.clone()));
+                app.caret_on = true;
+                app.last_caret_toggle = std::time::Instant::now();
+
+                let val_len = app.form.get_value(&new_key).chars().count();
+                app.form.set_cursor(&new_key, val_len);
+                app.form.select_all(&new_key);
+
+                if let Some(ref dom) = app.dom {
+                    if let Some(root) = dom.document_element() {
+                        fn find_node_ptr(node: &std::rc::Rc<toldo_ui_engine::dom::Node>, target_key: &str) -> Option<*const toldo_ui_engine::dom::Node> {
+                            let key = format!("{:p}", toldo_ui_engine::dom::node_ptr(node));
+                            if key == target_key {
+                                return Some(toldo_ui_engine::dom::node_ptr(node));
+                            }
+                            for child in &node.children {
+                                if let Some(n) = find_node_ptr(child, target_key) {
+                                    return Some(n);
+                                }
+                            }
+                            None
+                        }
+
+                        if let Some(node_ptr) = find_node_ptr(&root, &new_key) {
+                            if let Some((_, node_y)) = get_node_abs_pos(&root, node_ptr, &app.layout, 0.0, 0.0) {
+                                if let Some(lr) = app.layout.get(node_ptr) {
+                                    let node_h = lr.size.height;
+                                    if let Some(ref win) = app.window {
+                                        let wh = win.inner_size().height.max(100) as f32;
+                                        let ch = app.layout.content_height(&root);
+                                        let max_scroll = (ch - wh).max(0.0);
+
+                                        let margin = 20.0;
+                                        if node_y < app.scroll_y {
+                                            app.scroll_y = (node_y - margin).clamp(0.0, max_scroll);
+                                        } else if node_y + node_h > app.scroll_y + wh {
+                                            app.scroll_y = (node_y + node_h - wh + margin).clamp(0.0, max_scroll);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let Some(w) = &app.window {
+                    w.request_redraw();
+                }
+            }
+            return;
+        }
+
         if let Some(ref focused) = app.form.focused.clone() {
             app.caret_on = true;
             app.last_caret_toggle = std::time::Instant::now();
@@ -131,21 +209,26 @@ pub(crate) fn handle_keyboard(app: &mut App, event: winit::event::KeyEvent) {
             app.scroll_to_caret(focused);
             if let Some(w) = &app.window { w.request_redraw(); }
         } else {
+            let win = match &app.window { Some(w) => w.clone(), None => return };
+            let wh = win.inner_size().height.max(100) as f32;
+            let ch = app.dom.as_ref().and_then(|d| d.document_element()).map(|r| app.layout.content_height(&r)).unwrap_or(0.0);
+            let max_scroll = (ch - wh).max(0.0);
+
             match &event.logical_key {
                 Key::Named(NamedKey::ArrowUp) => {
-                    app.scroll_y = (app.scroll_y - 30.0).max(0.0);
+                    app.scroll_y = (app.scroll_y - 30.0).clamp(0.0, max_scroll);
                     if let Some(w) = &app.window { w.request_redraw(); }
                 }
                 Key::Named(NamedKey::ArrowDown) => {
-                    app.scroll_y += 30.0;
+                    app.scroll_y = (app.scroll_y + 30.0).clamp(0.0, max_scroll);
                     if let Some(w) = &app.window { w.request_redraw(); }
                 }
                 Key::Named(NamedKey::PageUp) => {
-                    app.scroll_y = (app.scroll_y - 300.0).max(0.0);
+                    app.scroll_y = (app.scroll_y - 300.0).clamp(0.0, max_scroll);
                     if let Some(w) = &app.window { w.request_redraw(); }
                 }
                 Key::Named(NamedKey::PageDown) => {
-                    app.scroll_y += 300.0;
+                    app.scroll_y = (app.scroll_y + 300.0).clamp(0.0, max_scroll);
                     if let Some(w) = &app.window { w.request_redraw(); }
                 }
                 Key::Character(c) if c == "r" || c == "R" => {
@@ -409,7 +492,8 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                         app.dragging_scrollbar = true;
                     } else {
                         let ratio = ((app.mouse_y - 2.0) - thumb_h * 0.5) / (track_h - thumb_h);
-                        app.scroll_y = (ratio * max_scroll).clamp(0.0, max_scroll);
+                        let val = (ratio * max_scroll).clamp(0.0, max_scroll);
+                        app.scroll_y = val;
                         if let Some(w) = &app.window { w.request_redraw(); }
                     }
                 }
@@ -438,7 +522,8 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
         let track_h = wh - 4.0;
         let thumb_h = (wh / ch * track_h).max(20.0);
         let ratio = (app.mouse_y - 2.0 - thumb_h * 0.5) / (track_h - thumb_h);
-        app.scroll_y = (ratio * max_scroll).clamp(0.0, max_scroll);
+        let val = (ratio * max_scroll).clamp(0.0, max_scroll);
+        app.scroll_y = val;
         if let Some(w) = &app.window { w.request_redraw(); }
     }
 
@@ -622,14 +707,17 @@ pub(crate) fn handle_mouse_wheel(app: &mut App, delta: MouseScrollDelta) {
     }
 
     if !scrolled_dropdown {
-        match delta {
-            MouseScrollDelta::LineDelta(_, y) => {
-                app.scroll_y = (app.scroll_y - y * 20.0).max(0.0);
-            }
-            MouseScrollDelta::PixelDelta(pos) => {
-                app.scroll_y = (app.scroll_y - pos.y as f32).max(0.0);
-            }
-        }
+        let win = match &app.window { Some(w) => w.clone(), None => return };
+        let wh = win.inner_size().height.max(100) as f32;
+        let ch = app.dom.as_ref().and_then(|d| d.document_element()).map(|r| app.layout.content_height(&r)).unwrap_or(0.0);
+        let max_scroll = (ch - wh).max(0.0);
+
+        let dy = match delta {
+            MouseScrollDelta::LineDelta(_, y) => -y * 70.0,
+            MouseScrollDelta::PixelDelta(pos) => -pos.y as f32,
+        };
+
+        app.scroll_y = (app.scroll_y + dy).clamp(0.0, max_scroll);
         app.dragging_scrollbar = false;
         app.update_cursor_icon();
         app.update_hover();
