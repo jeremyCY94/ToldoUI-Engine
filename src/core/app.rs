@@ -4,20 +4,20 @@ use std::time::Instant;
 use winit::window::{Window, CursorIcon};
 use raqote::DrawTarget;
 
-use toldo_ui_engine::css;
-use toldo_ui_engine::dom::{self, DomTree};
-use toldo_ui_engine::style::{self, StyleMap};
-use toldo_ui_engine::layout;
-use toldo_ui_engine::render;
-use toldo_ui_engine::form;
-use toldo_ui_engine::render::overlay::ModalState;
+use crate::css;
+use crate::dom::{self, DomTree};
+use crate::style::{self, StyleMap};
+use crate::layout;
+use crate::render;
+use crate::form;
+use crate::render::overlay::ModalState;
 
 pub struct EventListener {
     pub selector: String,
     pub callback: Box<dyn FnMut(&mut App, &Rc<dom::Node>)>,
 }
 
-pub(crate) struct App {
+pub struct App {
     pub(crate) window: Option<Rc<Window>>,
     pub(crate) ctx: Option<softbuffer::Context<Rc<Window>>>,
     pub(crate) surface: Option<softbuffer::Surface<Rc<Window>, Rc<Window>>>,
@@ -52,25 +52,25 @@ pub(crate) struct App {
     pub(crate) layout_dirty: bool,
     pub(crate) draw_target: Option<DrawTarget>,
     pub(crate) loading: bool,
-    pub(crate) modal: Option<ModalState>,
+    pub modal: Option<ModalState>,
     pub(crate) click_listeners: Vec<EventListener>,
 
 }
 
 impl App {
-    pub(crate) fn with_initial_content(mut self, html: &str, css: &str) -> Self {
+    pub fn with_initial_content(mut self, html: &str, css: &str) -> Self {
         self.initial_html = Some(html.to_string());
         self.initial_css = Some(css.to_string());
         self
     }
 
-    pub(crate) fn with_size(mut self, width: f64, height: f64) -> Self {
+    pub fn with_size(mut self, width: f64, height: f64) -> Self {
         self.width = width;
         self.height = height;
         self
     }
 
-    pub(crate) fn new(default_title: &str) -> Self {
+    pub fn new(default_title: &str) -> Self {
         App {
             window: None, ctx: None, surface: None,
             dom: None, stylesheet: None, hovered_node: None,
@@ -450,7 +450,7 @@ impl App {
         let max_w = lr.size.width - padding_left - padding_right - border_left - border_right - 2.0;
         if max_w <= 0.0 { return; }
 
-        let tw = toldo_ui_engine::render::painter::x_at_index(style, val, pos);
+        let tw = crate::render::painter::x_at_index(style, val, pos);
         let mut scroll_x = self.form.get_scroll_x(id);
 
         if tw - scroll_x < 0.0 {
@@ -655,7 +655,7 @@ impl<'a> RQuery<'a> {
             unsafe {
                 (*mut_ptr).children.clear();
             }
-            let mut parser = toldo_ui_engine::dom::parser::HtmlParser::new(html);
+            let mut parser = crate::dom::parser::HtmlParser::new(html);
             parser.parse_children(node, true);
         }
         self.app.resolve_styles();
@@ -828,7 +828,7 @@ impl<'a> RQuery<'a> {
     #[allow(dead_code)]
     pub fn append(self, html: &str) -> Self {
         for node in &self.nodes {
-            let mut parser = toldo_ui_engine::dom::parser::HtmlParser::new(html);
+            let mut parser = crate::dom::parser::HtmlParser::new(html);
             parser.parse_children(node, true);
         }
         self.app.resolve_styles();
@@ -839,7 +839,7 @@ impl<'a> RQuery<'a> {
     pub fn prepend(self, html: &str) -> Self {
         for node in &self.nodes {
             let temp_parent = dom::Node::new_document();
-            let mut parser = toldo_ui_engine::dom::parser::HtmlParser::new(html);
+            let mut parser = crate::dom::parser::HtmlParser::new(html);
             parser.parse_children(&temp_parent, true);
             let new_children = temp_parent.children.clone();
             if !new_children.is_empty() {

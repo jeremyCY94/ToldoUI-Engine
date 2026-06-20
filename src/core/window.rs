@@ -73,8 +73,8 @@ impl ApplicationHandler for App {
             let mut is_select = false;
             if let Some(ref dom) = self.dom {
                 if let Some(root) = dom.document_element() {
-                    fn check_is_select(node: &std::rc::Rc<toldo_ui_engine::dom::Node>, target_key: &str) -> bool {
-                        let key = format!("{:p}", toldo_ui_engine::dom::node_ptr(node));
+                    fn check_is_select(node: &std::rc::Rc<crate::dom::Node>, target_key: &str) -> bool {
+                        let key = format!("{:p}", crate::dom::node_ptr(node));
                         if key == target_key {
                             return node.tag_name() == Some("select");
                         }

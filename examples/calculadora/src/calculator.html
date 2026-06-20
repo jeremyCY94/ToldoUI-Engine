@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Calculadora Windows</title>
+</head>
+<body>
+    <div class="calculator-container">
+        <div class="calculator-header">
+            <span class="calculator-title">Calculadora</span>
+        </div>
+        
+        <!-- Pantalla del display -->
+        <div class="display-container">
+            <div id="calc-history" class="calc-history"></div>
+            <div id="calc-display" class="calc-display">0</div>
+        </div>
+
+        <!-- Rejilla de botones en filas Flexbox -->
+        <div class="buttons-grid">
+            <!-- Fila 1 -->
+            <div class="buttons-row">
+                <button id="btn-percent" class="btn btn-op">%</button>
+                <button id="btn-ce" class="btn btn-op">CE</button>
+                <button id="btn-c" class="btn btn-op">C</button>
+                <button id="btn-back" class="btn btn-op">⌫</button>
+            </div>
+
+            <!-- Fila 2 -->
+            <div class="buttons-row">
+                <button id="btn-inv" class="btn btn-op">1/x</button>
+                <button id="btn-sqr" class="btn btn-op">x²</button>
+                <button id="btn-sqrt" class="btn btn-op">√x</button>
+                <button id="btn-div" class="btn btn-op">/</button>
+            </div>
+
+            <!-- Fila 3 -->
+            <div class="buttons-row">
+                <button id="btn-7" class="btn btn-num">7</button>
+                <button id="btn-8" class="btn btn-num">8</button>
+                <button id="btn-9" class="btn btn-num">9</button>
+                <button id="btn-mul" class="btn btn-op">*</button>
+            </div>
+
+            <!-- Fila 4 -->
+            <div class="buttons-row">
+                <button id="btn-4" class="btn btn-num">4</button>
+                <button id="btn-5" class="btn btn-num">5</button>
+                <button id="btn-6" class="btn btn-num">6</button>
+                <button id="btn-sub" class="btn btn-op">-</button>
+            </div>
+
+            <!-- Fila 5 -->
+            <div class="buttons-row">
+                <button id="btn-1" class="btn btn-num">1</button>
+                <button id="btn-2" class="btn btn-num">2</button>
+                <button id="btn-3" class="btn btn-num">3</button>
+                <button id="btn-add" class="btn btn-op">+</button>
+            </div>
+
+            <!-- Fila 6 -->
+            <div class="buttons-row">
+                <button id="btn-sign" class="btn btn-num">±</button>
+                <button id="btn-0" class="btn btn-num">0</button>
+                <button id="btn-dot" class="btn btn-num">.</button>
+                <button id="btn-equal" class="btn btn-equal">=</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
