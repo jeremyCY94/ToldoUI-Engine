@@ -41,6 +41,10 @@ pub(crate) struct App {
     pub(crate) height: f64,
     pub(crate) modifiers: winit::keyboard::ModifiersState,
     pub(crate) last_dropdown_hover: Option<usize>,
+    pub(crate) last_layout_width: u32,
+    pub(crate) last_layout_height: u32,
+    pub(crate) layout_dirty: bool,
+    pub(crate) draw_target: Option<DrawTarget>,
 }
 
 impl App {
@@ -82,6 +86,10 @@ impl App {
             height: 768.0,
             modifiers: winit::keyboard::ModifiersState::default(),
             last_dropdown_hover: None,
+            last_layout_width: 0,
+            last_layout_height: 0,
+            layout_dirty: true,
+            draw_target: None,
         }
     }
 
@@ -92,6 +100,7 @@ impl App {
                 if let Some(root) = dom.document_element() {
                     if let Some(ref ss) = self.stylesheet {
                         self.styles = style::resolve_styles(ss, root, self.hovered_node, self.form.focused.as_deref());
+                        self.layout_dirty = true;
                     }
                 }
             }
@@ -108,6 +117,8 @@ impl App {
         self.form = form::FormState::new();
         populate_form(&dom, &mut self.form);
         self.dom = Some(dom);
+        self.scroll_y = 0.0;
+        self.layout_dirty = true;
         self.update_title();
     }
 
@@ -183,6 +194,7 @@ impl App {
                         let new_styles = style::resolve_styles(ss, root, self.hovered_node, self.form.focused.as_deref());
                         if new_styles != self.styles {
                             self.styles = new_styles;
+                            self.layout_dirty = true;
                             return true;
                         }
                     }
@@ -203,33 +215,43 @@ impl App {
         let mut content_h = 0.0;
         if let Some(ref dom) = self.dom {
             if let Some(root) = dom.document_element() {
-                self.layout.layout(&self.styles, root.clone(), w as f32, h as f32);
+                if self.layout_dirty || w != self.last_layout_width || h != self.last_layout_height {
+                    self.layout.layout(&self.styles, root.clone(), w as f32, h as f32);
+                    self.last_layout_width = w;
+                    self.last_layout_height = h;
+                    self.layout_dirty = false;
+                }
                 content_h = self.layout.content_height(&root);
                 let max_scroll = (content_h - h as f32).max(0.0);
-                self.scroll_y = self.scroll_y.min(max_scroll);
+
+                self.scroll_y = self.scroll_y.clamp(0.0, max_scroll);
             }
         }
 
-        let mut dt = DrawTarget::new(w as i32, h as i32);
+        if self.draw_target.is_none()
+            || self.draw_target.as_ref().unwrap().width() != w as i32
+            || self.draw_target.as_ref().unwrap().height() != h as i32
+        {
+            self.draw_target = Some(DrawTarget::new(w as i32, h as i32));
+        }
+
+        let dt = self.draw_target.as_mut().unwrap();
+        dt.clear(raqote::SolidSource::from_unpremultiplied_argb(255, 255, 255, 255));
+
         if let Some(ref dom) = self.dom {
             if let Some(root) = dom.document_element() {
-                self.painter.paint(&mut dt, &self.styles, &self.layout, &self.form, root, self.scroll_y, content_h, w as f32, h as f32, self.caret_on, self.mouse_x, self.mouse_y);
+                self.painter.paint(dt, &self.styles, &self.layout, &self.form, root, self.scroll_y, content_h, w as f32, h as f32, self.caret_on, self.mouse_x, self.mouse_y, self.dragging_scrollbar);
             }
         }
 
         let data = dt.get_data();
-        let count = (w * h) as usize;
-
         if let Some(ref mut surf) = self.surface {
             let mut buf = surf.buffer_mut().unwrap();
             let b = buf.as_mut();
-            for i in 0..count.min(b.len()) {
-                let p = if i < data.len() { data[i] } else { 0xFFFFFFFF };
-                let a = (p >> 24) & 0xFF;
-                let r = (p >> 16) & 0xFF;
-                let g = (p >> 8) & 0xFF;
-                let bl = p & 0xFF;
-                b[i] = bl | (g << 8) | (r << 16) | (a << 24);
+            let min_len = data.len().min(b.len());
+            b[..min_len].copy_from_slice(&data[..min_len]);
+            if b.len() > min_len {
+                b[min_len..].fill(0xFFFFFFFF);
             }
             buf.present().unwrap();
         }
@@ -366,6 +388,29 @@ impl App {
         }
 
         self.form.set_scroll_x(id, scroll_x.max(0.0));
+    }
+
+    pub(crate) fn get_focusable_nodes(&self) -> Vec<String> {
+        let mut focusables = Vec::new();
+        if let Some(ref dom) = self.dom {
+            if let Some(root) = dom.document_element() {
+                fn walk(node: &Rc<dom::Node>, list: &mut Vec<String>) {
+                    let tag = node.tag_name().unwrap_or("");
+                    let is_focusable = match tag {
+                        "input" | "textarea" | "select" | "button" | "a" => true,
+                        _ => false,
+                    };
+                    if is_focusable {
+                        list.push(format!("{:p}", dom::node_ptr(node)));
+                    }
+                    for child in &node.children {
+                        walk(child, list);
+                    }
+                }
+                walk(&root, &mut focusables);
+            }
+        }
+        focusables
     }
 }
 
