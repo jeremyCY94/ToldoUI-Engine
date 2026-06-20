@@ -1,0 +1,162 @@
+/* Reset básico */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    user-select: none;
+}
+
+body {
+    background-color: #0c0f17;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+    color: #ffffff;
+}
+
+/* Contenedor principal de la calculadora */
+.calculator-container {
+    background-color: #202020;
+    width: 320px;
+    border-radius: 8px;
+    border: 1px solid #2f2f2f;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Cabecera */
+.calculator-header {
+    padding: 8px 12px 4px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.calculator-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #cccccc;
+}
+
+/* Contenedor de la pantalla (Display) */
+.display-container {
+    height: 90px;
+    padding: 8px 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-end;
+    background-color: #202020;
+    margin-bottom: 8px;
+}
+
+.calc-history {
+    font-size: 14px;
+    color: #858585;
+    min-height: 20px;
+    word-break: break-all;
+    text-align: right;
+}
+
+.calc-display {
+    font-size: 38px;
+    font-weight: 600;
+    color: #ffffff;
+    word-break: break-all;
+    text-align: right;
+    line-height: 1.2;
+}
+
+/* Rejilla de botones basada en Flexbox */
+.buttons-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.buttons-row {
+    display: flex;
+    flex-direction: row;
+    gap: 3px;
+    width: 100%;
+}
+
+/* Estilo base de los botones con flex: 1 */
+.btn {
+    flex: 1;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    height: 48px;
+    font-size: 15px;
+    font-weight: 500;
+    color: #ffffff;
+    background-color: #2d2d2d;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Botones numéricos */
+.btn-num {
+    background-color: #3b3b3b;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.btn-num:hover {
+    background-color: #454545;
+    border-color: #555555;
+}
+
+.btn-num:active {
+    background-color: #323232;
+    border-color: transparent;
+}
+
+/* Botones de operaciones / controles */
+.btn-op {
+    background-color: #323232;
+}
+
+.btn-op:hover {
+    background-color: #3b3b3b;
+    border-color: #454545;
+}
+
+.btn-op:active {
+    background-color: #262626;
+    border-color: transparent;
+}
+
+/* Botón de igual (Acento Fluent) con flex: 1 */
+.btn-equal {
+    flex: 1;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    height: 48px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #ffffff;
+    background-color: #0078d4;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background-color 0.15s ease;
+}
+
+.btn-equal:hover {
+    background-color: #1084e3;
+}
+
+.btn-equal:active {
+    background-color: #005a9e;
+}

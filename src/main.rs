@@ -1,6 +1,4 @@
-mod core;
-
-use crate::core::app::App;
+use toldo_ui_engine::core::app::App;
 use winit::event_loop::EventLoop;
 use toldo_ui_engine::render::overlay::{ModalState, ModalType};
 

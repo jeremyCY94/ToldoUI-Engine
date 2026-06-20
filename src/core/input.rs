@@ -2,9 +2,9 @@ use winit::event::{ElementState, MouseButton, MouseScrollDelta};
 use winit::keyboard::{Key, NamedKey};
 use winit::dpi::PhysicalPosition;
 
-use toldo_ui_engine::dom;
-use toldo_ui_engine::form::actions::{delete_selected_text, get_selected_text, insert_text};
-use toldo_ui_engine::render::overlay::{ModalState, ModalType};
+use crate::dom;
+use crate::form::actions::{delete_selected_text, get_selected_text, insert_text};
+use crate::render::overlay::{ModalState, ModalType};
 
 use crate::core::app::{App, get_node_abs_pos};
 
@@ -61,10 +61,10 @@ pub(crate) fn handle_keyboard(app: &mut App, event: winit::event::KeyEvent) {
 
                 if let Some(ref dom) = app.dom {
                     if let Some(root) = dom.document_element() {
-                        fn find_node_ptr(node: &std::rc::Rc<toldo_ui_engine::dom::Node>, target_key: &str) -> Option<*const toldo_ui_engine::dom::Node> {
-                            let key = format!("{:p}", toldo_ui_engine::dom::node_ptr(node));
+                        fn find_node_ptr(node: &std::rc::Rc<crate::dom::Node>, target_key: &str) -> Option<*const crate::dom::Node> {
+                            let key = format!("{:p}", crate::dom::node_ptr(node));
                             if key == target_key {
-                                return Some(toldo_ui_engine::dom::node_ptr(node));
+                                return Some(crate::dom::node_ptr(node));
                             }
                             for child in &node.children {
                                 if let Some(n) = find_node_ptr(child, target_key) {
@@ -355,7 +355,7 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                                             let opt_h = 30.0;
                                             let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(&focused_node)) {
                                                 match style.max_height {
-                                                    toldo_ui_engine::style::Length::Px(v) => v,
+                                                    crate::style::Length::Px(v) => v,
                                                     _ => 7.0 * opt_h,
                                                 }
                                             } else {
@@ -460,12 +460,12 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                                     if let Some(root) = dom.document_element() {
                                         let name_attr = click_node.get_attribute("name");
                                         fn deselect_other_radios(
-                                            node: &std::rc::Rc<toldo_ui_engine::dom::Node>,
+                                            node: &std::rc::Rc<crate::dom::Node>,
                                             target_key: &str,
                                             group_name: &str,
-                                            form: &mut toldo_ui_engine::form::FormState,
+                                            form: &mut crate::form::FormState,
                                         ) {
-                                            let key = format!("{:p}", toldo_ui_engine::dom::node_ptr(node));
+                                            let key = format!("{:p}", crate::dom::node_ptr(node));
                                             if key != target_key && node.tag_name() == Some("input") {
                                                 if node.get_attribute("type") == Some("radio") {
                                                     if node.get_attribute("name") == Some(group_name) {
@@ -504,23 +504,23 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                             if let Some(root) = app.dom.as_ref().and_then(|d| d.document_element()) {
                                 if let Some((node_x, node_y)) = get_node_abs_pos(&root, node_ptr, &app.layout, 0.0, 0.0) {
                                     if let Some(style) = app.styles.get(&node_ptr) {
-                                        let padding_left = match style.padding_left { toldo_ui_engine::style::Length::Px(v) => v, _ => 0.0 };
+                                        let padding_left = match style.padding_left { crate::style::Length::Px(v) => v, _ => 0.0 };
                                         let border_left = style.border.left.width;
                                         let cx = node_x + padding_left + border_left;
                                         let target_x = app.mouse_x - cx;
                                         
                                         if form_type == "textarea" {
-                                            let padding_top = match style.padding_top { toldo_ui_engine::style::Length::Px(v) => v, _ => 0.0 };
+                                            let padding_top = match style.padding_top { crate::style::Length::Px(v) => v, _ => 0.0 };
                                             let border_top = style.border.top.width;
                                             let cy = node_y + padding_top + border_top;
                                             let target_y = app.mouse_y + app.scroll_y - cy;
                                             
-                                            let padding_right = match style.padding_right { toldo_ui_engine::style::Length::Px(v) => v, _ => 0.0 };
+                                            let padding_right = match style.padding_right { crate::style::Length::Px(v) => v, _ => 0.0 };
                                             let border_right = style.border.right.width;
                                             let node_w = app.layout.get(node_ptr).map(|l| l.size.width).unwrap_or(0.0);
                                             let max_w = node_w - padding_left - padding_right - border_left - border_right - 2.0;
                                             
-                                            start_idx = toldo_ui_engine::render::painter::textarea_index_at_point(
+                                            start_idx = crate::render::painter::textarea_index_at_point(
                                                 style,
                                                 val,
                                                 target_x,
@@ -528,7 +528,7 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                                                 max_w,
                                             );
                                         } else {
-                                            start_idx = toldo_ui_engine::render::painter::index_at_x(style, val, target_x);
+                                            start_idx = crate::render::painter::index_at_x(style, val, target_x);
                                         }
                                     }
                                 }
@@ -609,7 +609,7 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
             if let Some(root) = app.dom.as_ref().and_then(|d| d.document_element()) {
                 if let Some((node_x, node_y)) = get_node_abs_pos(&root, node_ptr, &app.layout, 0.0, 0.0) {
                     if let Some(style) = app.styles.get(&node_ptr) {
-                        let padding_left = match style.padding_left { toldo_ui_engine::style::Length::Px(v) => v, _ => 0.0 };
+                        let padding_left = match style.padding_left { crate::style::Length::Px(v) => v, _ => 0.0 };
                         let border_left = style.border.left.width;
                         let cx = node_x + padding_left + border_left;
                         let val = app.form.get_value(&key);
@@ -617,17 +617,17 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
                         
                         let is_textarea = unsafe { (*node_ptr).tag_name() == Some("textarea") };
                         let current_idx = if is_textarea {
-                            let padding_top = match style.padding_top { toldo_ui_engine::style::Length::Px(v) => v, _ => 0.0 };
+                            let padding_top = match style.padding_top { crate::style::Length::Px(v) => v, _ => 0.0 };
                             let border_top = style.border.top.width;
                             let cy = node_y + padding_top + border_top;
                             let target_y = app.mouse_y + app.scroll_y - cy;
                             
-                            let padding_right = match style.padding_right { toldo_ui_engine::style::Length::Px(v) => v, _ => 0.0 };
+                            let padding_right = match style.padding_right { crate::style::Length::Px(v) => v, _ => 0.0 };
                             let border_right = style.border.right.width;
                             let node_w = app.layout.get(node_ptr).map(|l| l.size.width).unwrap_or(0.0);
                             let max_w = node_w - padding_left - padding_right - border_left - border_right - 2.0;
                             
-                            toldo_ui_engine::render::painter::textarea_index_at_point(
+                            crate::render::painter::textarea_index_at_point(
                                 style,
                                 val,
                                 target_x,
@@ -635,7 +635,7 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
                                 max_w,
                             )
                         } else {
-                            toldo_ui_engine::render::painter::index_at_x(style, val, target_x)
+                            crate::render::painter::index_at_x(style, val, target_x)
                         };
 
                         if let Some((start_idx, _)) = app.form.get_selection(&key) {
@@ -656,8 +656,8 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
     if let Some(ref focused_key) = app.form.focused {
         if let Some(ref dom) = app.dom {
             if let Some(root) = dom.document_element() {
-                fn find_select(node: &std::rc::Rc<toldo_ui_engine::dom::Node>, target_key: &str) -> Option<std::rc::Rc<toldo_ui_engine::dom::Node>> {
-                    let key = format!("{:p}", toldo_ui_engine::dom::node_ptr(node));
+                fn find_select(node: &std::rc::Rc<crate::dom::Node>, target_key: &str) -> Option<std::rc::Rc<crate::dom::Node>> {
+                    let key = format!("{:p}", crate::dom::node_ptr(node));
                     if key == target_key {
                         if node.tag_name() == Some("select") {
                             return Some(node.clone());
@@ -686,7 +686,7 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
                             let opt_h = 30.0;
                             let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(&focused_node)) {
                                 match style.max_height {
-                                    toldo_ui_engine::style::Length::Px(v) => v,
+                                    crate::style::Length::Px(v) => v,
                                     _ => 7.0 * opt_h,
                                 }
                             } else {
@@ -756,7 +756,7 @@ pub(crate) fn handle_mouse_wheel(app: &mut App, delta: MouseScrollDelta) {
                                 let opt_h = 30.0;
                                 let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(&focused_node)) {
                                     match style.max_height {
-                                        toldo_ui_engine::style::Length::Px(v) => v,
+                                        crate::style::Length::Px(v) => v,
                                         _ => 7.0 * opt_h,
                                     }
                                 } else {
