@@ -4,10 +4,14 @@ use winit::dpi::PhysicalPosition;
 
 use toldo_ui_engine::dom;
 use toldo_ui_engine::form::actions::{delete_selected_text, get_selected_text, insert_text};
+use toldo_ui_engine::render::overlay::ModalType;
 
 use crate::core::app::{App, get_node_abs_pos};
 
 pub(crate) fn handle_keyboard(app: &mut App, event: winit::event::KeyEvent) {
+    if app.modal.is_some() {
+        return;
+    }
     if event.state == ElementState::Pressed {
         if event.logical_key == Key::Named(NamedKey::Tab) {
             let focusables = app.get_focusable_nodes();
@@ -232,8 +236,11 @@ pub(crate) fn handle_keyboard(app: &mut App, event: winit::event::KeyEvent) {
                     if let Some(w) = &app.window { w.request_redraw(); }
                 }
                 Key::Character(c) if c == "r" || c == "R" => {
+                    // Activar el skeleton loader e iniciar la carga diferida
+                    app.loading = true;
+                    app.dom = None;
                     if let (Some(html), Some(css)) = (app.initial_html.clone(), app.initial_css.clone()) {
-                        app.load(&html, &css);
+                        app.deferred_load = Some((std::time::Instant::now() + std::time::Duration::from_millis(800), html, css));
                     }
                     if let Some(w) = &app.window { w.request_redraw(); }
                 }
@@ -244,6 +251,46 @@ pub(crate) fn handle_keyboard(app: &mut App, event: winit::event::KeyEvent) {
 }
 
 pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: MouseButton) {
+    if let Some(modal) = app.modal.clone() {
+        if button == MouseButton::Left && state == ElementState::Pressed {
+            let win = match &app.window { Some(w) => w.clone(), None => return };
+            let size = win.inner_size();
+            let vw = size.width.max(100) as f32;
+            let vh = size.height.max(100) as f32;
+
+            let mw = 420.0;
+            let mh = 220.0;
+            let mx = (vw - mw) / 2.0;
+            let my = (vh - mh) / 2.0;
+
+            let btn_w = 100.0;
+            let btn_h = 36.0;
+            let btn_y = my + mh - 24.0 - btn_h;
+            let accept_x = mx + mw - 24.0 - btn_w;
+            let cancel_x = accept_x - 12.0 - btn_w;
+
+            if app.mouse_x >= accept_x && app.mouse_x < accept_x + btn_w && app.mouse_y >= btn_y && app.mouse_y < btn_y + btn_h {
+                if modal.action == "confirm_submit" {
+                    app.loading = true;
+                    app.dom = None;
+                    app.deferred_action = Some((std::time::Instant::now() + std::time::Duration::from_secs(2), "submit_success".to_string()));
+                    app.modal = None;
+                    app.focus_node(None);
+                } else {
+                    app.modal = None;
+                }
+                if let Some(w) = &app.window {
+                    w.request_redraw();
+                }
+            } else if modal.modal_type == ModalType::Confirm && app.mouse_x >= cancel_x && app.mouse_x < cancel_x + btn_w && app.mouse_y >= btn_y && app.mouse_y < btn_y + btn_h {
+                app.modal = None;
+                if let Some(w) = &app.window {
+                    w.request_redraw();
+                }
+            }
+        }
+        return;
+    }
     if button == MouseButton::Left {
         let win = match &app.window { Some(w) => w.clone(), None => return };
         let size = win.inner_size();
@@ -383,6 +430,19 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                     
                     let key = format!("{:p}", dom::node_ptr(&click_node));
                     match form_type {
+                        "button" => {
+                            let mut listeners = std::mem::take(&mut app.click_listeners);
+                            for listener in &mut listeners {
+                                if crate::core::app::matches_selector(&click_node, &listener.selector) {
+                                    (listener.callback)(app, &click_node);
+                                }
+                            }
+                            app.click_listeners.extend(listeners);
+
+                            app.focus_node(None);
+                            app.click_count = 0;
+                            if let Some(w) = &app.window { w.request_redraw(); }
+                        }
                         "checkbox" => { app.form.toggle(&key); app.focus_node(None); app.click_count = 0; }
                         "radio" => {
                             if !app.form.is_checked(&key) {
@@ -512,6 +572,13 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
 pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>) {
     app.mouse_x = position.x as f32;
     app.mouse_y = position.y as f32;
+
+    if app.modal.is_some() {
+        if let Some(w) = &app.window {
+            w.request_redraw();
+        }
+        return;
+    }
 
     if app.dragging_scrollbar {
         let win = match &app.window { Some(w) => w.clone(), None => return };
@@ -644,6 +711,9 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
 }
 
 pub(crate) fn handle_mouse_wheel(app: &mut App, delta: MouseScrollDelta) {
+    if app.modal.is_some() {
+        return;
+    }
     let mut scrolled_dropdown = false;
     if let Some(ref focused_key) = app.form.focused.clone() {
         if let Some(ref dom) = app.dom {

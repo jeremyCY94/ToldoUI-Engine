@@ -13,6 +13,7 @@ use super::primitives;
 use super::text;
 use super::inputs;
 use super::select;
+use super::overlay;
 
 // Re-export methods used by input.rs and app.rs to keep compatibility
 pub use super::text::{index_at_x, x_at_index};
@@ -52,6 +53,9 @@ impl Painter {
         mouse_x: f32,
         mouse_y: f32,
         dragging_scrollbar: bool,
+        loading: bool,
+        spinner_angle: f32,
+        modal: &Option<overlay::ModalState>,
     ) {
         dt.clear(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255));
         self.paint_node(dt, styles, layout, form, &root, 0.0, -scroll_y, caret_on);
@@ -118,6 +122,14 @@ impl Painter {
             mouse_x,
             mouse_y,
         );
+
+        if loading {
+            overlay::paint_loading_overlay(dt, vw, vh, spinner_angle);
+        }
+
+        if let Some(m) = modal {
+            overlay::paint_modal_overlay(dt, &mut self.fonts, m, vw, vh, mouse_x, mouse_y);
+        }
     }
 
     fn paint_node(
