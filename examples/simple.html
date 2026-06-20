@@ -6,7 +6,9 @@
 </head>
 
 <body>
-  <header id="header">
+  <header id="header"
+    style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 30px 20px;">
+    <img src="examples/logo.png" width="90" height="90" style="border-radius: 50%;" />
     <h1>ToldoUI-Engine</h1>
     <p>Minimal HTML/CSS rendering engine con FlexBox completo</p>
   </header>
@@ -219,6 +221,15 @@
 
         <button>Enviar</button>
       </form>
+    </section>
+
+    <section class="card" style="display: flex; flex-direction: column; gap: 16px; align-items: center;">
+      <h2>Galería de Imágenes</h2>
+      <p style="font-weight: bold; color: #555;">Portada del Engine (portada.png):</p>
+      <img src="examples/portada.png" width="900" height="250" style="border-radius: 8px;" />
+
+      <p style="font-weight: bold; color: #555; margin-top: 10px;">Control de Error (Ruta inexistente):</p>
+      <img src="examples/no_existe.png" width="300" height="80" style="border-radius: 6px;" />
     </section>
 
   </main>
