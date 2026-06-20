@@ -22,8 +22,8 @@
 
 
     <section style="background-color: white; padding: 20px ; gap: 10px; display: flex; flex-direction: row;">
-      <button>Un boton por defecto</button>
-      <button class="btn-custom-hover">Botón con Hover CSS</button>
+      <button id="btn-default">Un boton por defecto</button>
+      <button id="btn-hover" class="btn-custom-hover">Botón con Hover CSS</button>
     </section>
 
     <section style="background-color: white; padding: 20px ; gap: 10px; display: flex; flex-direction: column;">
@@ -217,8 +217,70 @@
         <label>Mensaje</label>
         <textarea style="height: 600px;">Escribe tu mensaje aquí</textarea>
 
-        <button>Enviar</button>
+        <button id="btn-enviar">Enviar</button>
       </form>
+    </section>
+
+    <section class="card">
+      <h2>RQuery API Interactive Demo</h2>
+      <div id="playground-wrapper" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px;">
+        <div id="playground-target" class="box box-1"
+          style="height: 60px; min-height: 60px; display: flex; align-items: center; justify-content: center; font-weight: bold; border-radius: 6px;">
+          Playground Target
+        </div>
+      </div>
+
+      <h3
+        style="font-size: 16px; color: #2c3e50; margin: 12px 0 6px 0; border-bottom: 1px solid #eee; padding-bottom: 4px;">
+        Class & Style Manipulation</h3>
+      <div class="flex-row flex-wrap" style="gap: 8px; margin-bottom: 12px;">
+        <button id="btn-add-class">Add Class (.medium)</button>
+        <button id="btn-remove-class">Remove Class (.medium)</button>
+        <button id="btn-toggle-class">Toggle Class (.medium)</button>
+        <button id="btn-css-color">Set CSS Background (Indigo)</button>
+        <button id="btn-hide">Hide</button>
+        <button id="btn-show">Show</button>
+      </div>
+
+      <h3
+        style="font-size: 16px; color: #2c3e50; margin: 12px 0 6px 0; border-bottom: 1px solid #eee; padding-bottom: 4px;">
+        DOM Insertions & Deletions</h3>
+      <div class="flex-row flex-wrap" style="gap: 8px; margin-bottom: 12px;">
+        <button id="btn-append">Append HTML</button>
+        <button id="btn-prepend">Prepend HTML</button>
+        <button id="btn-empty">Empty Children</button>
+        <button id="btn-remove">Remove Element</button>
+        <button id="btn-reset-html">Reset Playground HTML</button>
+      </div>
+
+      <h3
+        style="font-size: 16px; color: #2c3e50; margin: 12px 0 6px 0; border-bottom: 1px solid #eee; padding-bottom: 4px;">
+        Form Values & States</h3>
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;">
+        <div class="flex-row" style="gap: 12px;">
+          <input type="text" id="playground-input" placeholder="Interactúa con RQuery..." value="Texto inicial"
+            style="flex-grow: 1;">
+          <button id="btn-get-val" style="width: auto;">Get Val (Alert)</button>
+          <button id="btn-set-val" style="width: auto;">Set Val ("Hola RQuery")</button>
+        </div>
+        <div class="flex-row" style="gap: 12px;">
+          <label class="checkbox-label" style="flex-grow: 1;">
+            <input type="checkbox" id="playground-checkbox"> Test Checkbox
+          </label>
+          <button id="btn-get-checked" style="width: auto;">Is Checked? (Alert)</button>
+          <button id="btn-set-checked-true" style="width: auto;">Check</button>
+          <button id="btn-set-checked-false" style="width: auto;">Uncheck</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" style="display: flex; flex-direction: column; gap: 16px; align-items: center;">
+      <h2>Galería de Imágenes</h2>
+      <p style="font-weight: bold; color: #555;">Portada del Engine (portada.png):</p>
+      <img src="examples/portada.png" width="900" height="250" style="border-radius: 8px;" />
+
+      <p style="font-weight: bold; color: #555; margin-top: 10px;">Control de Error (Ruta inexistente):</p>
+      <img src="examples/no_existe.png" width="300" height="80" style="border-radius: 6px;" />
     </section>
 
   </main>

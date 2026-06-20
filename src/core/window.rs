@@ -24,8 +24,13 @@ impl ApplicationHandler for App {
 
         let size = window.inner_size();
         self.surface.as_mut().unwrap().resize(NonZero::new(size.width).unwrap(), NonZero::new(size.height).unwrap()).unwrap();
+        
+        // Activar el skeleton loader e iniciar la carga diferida
+        self.loading = true;
+        self.dom = None;
+
         if let (Some(html), Some(css)) = (self.initial_html.clone(), self.initial_css.clone()) {
-            self.load(&html, &css);
+            self.deferred_load = Some((std::time::Instant::now() + std::time::Duration::from_millis(1000), html, css));
         }
         window.request_redraw();
     }
@@ -64,6 +69,15 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, el: &ActiveEventLoop) {
+        if self.loading {
+            let now = Instant::now();
+            if let Some(ref w) = self.window {
+                w.request_redraw();
+            }
+            el.set_control_flow(ControlFlow::WaitUntil(now + std::time::Duration::from_millis(16)));
+            return;
+        }
+
         let mut needs_blink = false;
         if let Some(ref focused_key) = self.form.focused {
             let mut is_select = false;
