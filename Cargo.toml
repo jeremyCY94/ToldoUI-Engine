@@ -16,3 +16,5 @@ rusttype = "0.9"
 font-kit = "0.14"
 unicode-width = "0.2"
 arboard = "3.6.1"
+image = "0.25"
+
