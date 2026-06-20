@@ -51,7 +51,7 @@ pub(crate) struct App {
     pub(crate) last_layout_height: u32,
     pub(crate) layout_dirty: bool,
     pub(crate) draw_target: Option<DrawTarget>,
-
+    pub(crate) loading: bool,
     pub(crate) modal: Option<ModalState>,
     pub(crate) click_listeners: Vec<EventListener>,
 
@@ -100,7 +100,7 @@ impl App {
             last_layout_height: 0,
             layout_dirty: true,
             draw_target: None,
-
+            loading: true,
             modal: None,
             click_listeners: Vec::new(),
 
@@ -147,6 +147,8 @@ impl App {
     }
 
     pub(crate) fn load(&mut self, html: &str, css: &str) {
+        self.hovered_node = None;
+        self.dragging_node = None;
         let dom = DomTree::parse_html(html);
         let ss = css::Stylesheet::parse(css);
         if let Some(root) = dom.document_element() {
@@ -300,6 +302,7 @@ impl App {
             self.mouse_x,
             self.mouse_y,
             self.dragging_scrollbar,
+            self.loading,
             &self.modal,
         );
 
@@ -315,7 +318,15 @@ impl App {
             buf.present().unwrap();
         }
 
-
+        if self.dom.is_none() && self.loading {
+            if let (Some(html), Some(css)) = (self.initial_html.clone(), self.initial_css.clone()) {
+                self.load(&html, &css);
+            }
+            self.loading = false;
+            if let Some(ref w) = self.window {
+                w.request_redraw();
+            }
+        }
     }
 
     pub(crate) fn hit_test(&self, mx: f32, my: f32) -> Option<(std::rc::Rc<dom::Node>, &'static str)> {
