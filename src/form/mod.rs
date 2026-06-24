@@ -2,6 +2,13 @@ pub mod actions;
 
 use std::collections::HashMap;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DateSection {
+    Day,
+    Month,
+    Year,
+}
+
 #[derive(Clone)]
 pub struct FormState {
     pub input_values: HashMap<String, String>,
@@ -11,6 +18,8 @@ pub struct FormState {
     pub selection: HashMap<String, (usize, usize)>, // (start, end)
     pub scroll_x: HashMap<String, f32>,
     pub dropdown_scroll_y: HashMap<String, f32>,
+    pub date_active_section: HashMap<String, DateSection>,
+    pub date_years_range: HashMap<String, (i32, i32)>,
 }
 
 impl FormState {
@@ -23,6 +32,8 @@ impl FormState {
             selection: HashMap::new(),
             scroll_x: HashMap::new(),
             dropdown_scroll_y: HashMap::new(),
+            date_active_section: HashMap::new(),
+            date_years_range: HashMap::new(),
         }
     }
 
@@ -99,5 +110,45 @@ impl FormState {
 
     pub fn set_dropdown_scroll_y(&mut self, id: &str, val: f32) {
         self.dropdown_scroll_y.insert(id.to_string(), val);
+    }
+
+    pub fn get_date_active_section(&self, id: &str) -> Option<DateSection> {
+        self.date_active_section.get(id).copied()
+    }
+
+    pub fn set_date_active_section(&mut self, id: &str, sec: DateSection) {
+        self.date_active_section.insert(id.to_string(), sec);
+    }
+
+    pub fn get_date_years_range(&self, id: &str) -> (i32, i32) {
+        self.date_years_range.get(id).copied().unwrap_or_else(|| {
+            let current = get_current_year();
+            (current - 10, current + 10)
+        })
+    }
+
+    pub fn set_date_years_range(&mut self, id: &str, range: (i32, i32)) {
+        self.date_years_range.insert(id.to_string(), range);
+    }
+}
+
+pub fn get_current_year() -> i32 {
+    if let Ok(duration) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        let secs = duration.as_secs();
+        let days = secs / 86400;
+        let mut year = 1970;
+        let mut days_left = days;
+        loop {
+            let is_leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+            let days_in_year = if is_leap { 366 } else { 365 };
+            if days_left < days_in_year {
+                break;
+            }
+            days_left -= days_in_year;
+            year += 1;
+        }
+        year as i32
+    } else {
+        2026
     }
 }

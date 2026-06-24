@@ -14,6 +14,7 @@ use super::text;
 use super::inputs;
 use super::select;
 use super::overlay;
+use super::date_dropdown;
 
 // Re-export methods used by input.rs and app.rs to keep compatibility
 pub use super::text::{index_at_x, x_at_index};
@@ -111,6 +112,19 @@ impl Painter {
 
         // Draw the select dropdown overlay if a select is focused
         select::paint_select_dropdown_overlay(
+            dt,
+            &mut self.fonts,
+            styles,
+            layout,
+            form,
+            &root,
+            scroll_y,
+            mouse_x,
+            mouse_y,
+        );
+
+        // Draw the date dropdown overlay if a date input is focused
+        date_dropdown::paint_date_dropdown_overlay(
             dt,
             &mut self.fonts,
             styles,
