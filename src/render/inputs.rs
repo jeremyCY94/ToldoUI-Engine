@@ -203,7 +203,13 @@ pub fn paint_input_text(
     caret_on: bool,
 ) {
     let cx = x + lp(&style.padding_left) + style.border.left.width;
-    let val = form.get_value(key).to_string();
+    let is_date = node.tag_name() == Some("input") && node.get_attribute("type") == Some("date");
+    let raw_val = form.get_value(key).to_string();
+    let val = if is_date && raw_val.is_empty() {
+        node.get_attribute("format").unwrap_or("dd/MM/yyyy").to_string()
+    } else {
+        raw_val
+    };
     let focused = form.focused.as_ref().map_or(false, |f| f == key);
     let scroll_x = form.get_scroll_x(key);
 

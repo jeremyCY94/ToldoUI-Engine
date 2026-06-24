@@ -5,8 +5,90 @@ use winit::dpi::PhysicalPosition;
 use crate::dom;
 use crate::form::actions::{delete_selected_text, get_selected_text, insert_text};
 use crate::render::overlay::{ModalState, ModalType};
+use crate::form::DateSection;
+use crate::render::select::find_node_by_key;
 
 use crate::core::app::{App, get_node_abs_pos};
+
+pub fn get_date_section_and_bounds(format: &str, pos: usize) -> (DateSection, usize, usize) {
+    let format_lower = format.to_lowercase();
+    if format_lower == "yyyy-mm-dd" {
+        if pos < 4 {
+            (DateSection::Year, 0, 4)
+        } else if pos >= 5 && pos < 7 {
+            (DateSection::Month, 5, 7)
+        } else if pos >= 8 {
+            (DateSection::Day, 8, 10)
+        } else {
+            if pos == 4 {
+                (DateSection::Year, 0, 4)
+            } else {
+                (DateSection::Month, 5, 7)
+            }
+        }
+    } else {
+        // dd/MM/yyyy
+        if pos < 2 {
+            (DateSection::Day, 0, 2)
+        } else if pos >= 3 && pos < 5 {
+            (DateSection::Month, 3, 5)
+        } else if pos >= 6 {
+            (DateSection::Year, 6, 10)
+        } else {
+            if pos == 2 {
+                (DateSection::Day, 0, 2)
+            } else {
+                (DateSection::Month, 3, 5)
+            }
+        }
+    }
+}
+
+fn update_date_value_section(val: &str, format: &str, section: DateSection, new_sec_val: &str) -> String {
+    let mut chars: Vec<char> = val.chars().collect();
+    let format_lower = format.to_lowercase();
+    let new_chars: Vec<char> = new_sec_val.chars().collect();
+    
+    if format_lower == "yyyy-mm-dd" {
+        match section {
+            DateSection::Year => {
+                if chars.len() >= 4 && new_chars.len() == 4 {
+                    chars[0..4].copy_from_slice(&new_chars[0..4]);
+                }
+            }
+            DateSection::Month => {
+                if chars.len() >= 7 && new_chars.len() == 2 {
+                    chars[5..7].copy_from_slice(&new_chars[0..2]);
+                }
+            }
+            DateSection::Day => {
+                if chars.len() >= 10 && new_chars.len() == 2 {
+                    chars[8..10].copy_from_slice(&new_chars[0..2]);
+                }
+            }
+        }
+    } else {
+        // dd/MM/yyyy
+        match section {
+            DateSection::Day => {
+                if chars.len() >= 2 && new_chars.len() == 2 {
+                    chars[0..2].copy_from_slice(&new_chars[0..2]);
+                }
+            }
+            DateSection::Month => {
+                if chars.len() >= 5 && new_chars.len() == 2 {
+                    chars[3..5].copy_from_slice(&new_chars[0..2]);
+                }
+            }
+            DateSection::Year => {
+                if chars.len() >= 10 && new_chars.len() == 4 {
+                    chars[6..10].copy_from_slice(&new_chars[0..4]);
+                }
+            }
+        }
+    }
+    chars.into_iter().collect()
+}
 
 pub(crate) fn handle_keyboard(app: &mut App, event: winit::event::KeyEvent) {
     if app.modal.is_some() {
@@ -106,6 +188,107 @@ pub(crate) fn handle_keyboard(app: &mut App, event: winit::event::KeyEvent) {
         if let Some(ref focused) = app.form.focused.clone() {
             app.caret_on = true;
             app.last_caret_toggle = std::time::Instant::now();
+
+            let mut is_date_input = false;
+            let mut date_format = String::new();
+            if let Some(ref dom) = app.dom {
+                if let Some(root) = dom.document_element() {
+                    if let Some(node) = find_node_by_key(&root, focused) {
+                        if node.tag_name() == Some("input") && node.get_attribute("type") == Some("date") {
+                            is_date_input = true;
+                            date_format = node.get_attribute("format").unwrap_or("dd/MM/yyyy").to_string();
+                        }
+                    }
+                }
+            }
+
+            if is_date_input {
+                let mut val = app.form.get_value(focused).to_string();
+                if val.is_empty() {
+                    val = date_format.clone();
+                    app.form.set_value(focused, val.clone());
+                }
+                let pos = app.form.cursor(focused);
+                
+                match &event.logical_key {
+                    Key::Named(NamedKey::Backspace) => {
+                        let mut idx = pos;
+                        while idx > 0 {
+                            idx -= 1;
+                            let c = val.chars().nth(idx).unwrap_or(' ');
+                            if c != '/' && c != '-' {
+                                let template_char = date_format.chars().nth(idx).unwrap_or(c);
+                                let mut chars: Vec<char> = val.chars().collect();
+                                if idx < chars.len() {
+                                    chars[idx] = template_char;
+                                    let new_val: String = chars.into_iter().collect();
+                                    app.form.set_value(focused, new_val);
+                                    app.form.set_cursor(focused, idx);
+                                    let active_sec = get_date_section_and_bounds(&date_format, idx).0;
+                                    app.form.set_date_active_section(focused, active_sec);
+                                }
+                                break;
+                            }
+                        }
+                        if let Some(w) = &app.window { w.request_redraw(); }
+                    }
+                    Key::Named(NamedKey::ArrowLeft) => {
+                        if pos > 0 {
+                            let new_pos = pos - 1;
+                            app.form.set_cursor(focused, new_pos);
+                            app.form.set_selection(focused, new_pos, new_pos);
+                            let active_sec = get_date_section_and_bounds(&date_format, new_pos).0;
+                            app.form.set_date_active_section(focused, active_sec);
+                        }
+                    }
+                    Key::Named(NamedKey::ArrowRight) => {
+                        if pos < val.chars().count() {
+                            let new_pos = pos + 1;
+                            app.form.set_cursor(focused, new_pos);
+                            app.form.set_selection(focused, new_pos, new_pos);
+                            let active_sec = get_date_section_and_bounds(&date_format, new_pos.min(val.chars().count() - 1)).0;
+                            app.form.set_date_active_section(focused, active_sec);
+                        }
+                    }
+                    Key::Character(c) if c.len() == 1 && c.chars().next().unwrap().is_ascii_digit() => {
+                        let digit = c.chars().next().unwrap();
+                        let mut idx = pos;
+                        while idx < val.chars().count() {
+                            let ch = val.chars().nth(idx).unwrap_or(' ');
+                            if ch != '/' && ch != '-' {
+                                let mut chars: Vec<char> = val.chars().collect();
+                                chars[idx] = digit;
+                                let new_val: String = chars.into_iter().collect();
+                                app.form.set_value(focused, new_val);
+                                
+                                let mut next_pos = idx + 1;
+                                if next_pos < date_format.chars().count() {
+                                    let next_c = date_format.chars().nth(next_pos).unwrap();
+                                    if next_c == '/' || next_c == '-' {
+                                        next_pos += 1;
+                                    }
+                                }
+                                app.form.set_cursor(focused, next_pos.min(date_format.chars().count()));
+                                
+                                let active_sec = get_date_section_and_bounds(&date_format, next_pos.min(date_format.chars().count() - 1)).0;
+                                app.form.set_date_active_section(focused, active_sec);
+                                break;
+                            }
+                            idx += 1;
+                        }
+                        if let Some(w) = &app.window { w.request_redraw(); }
+                    }
+                    Key::Named(NamedKey::Escape) => {
+                        app.focus_node(None);
+                        if let Some(w) = &app.window { w.request_redraw(); }
+                    }
+                    _ => {}
+                }
+                
+                app.scroll_to_caret(focused);
+                if let Some(w) = &app.window { w.request_redraw(); }
+                return;
+            }
 
             if app.modifiers.control_key() {
                 if let Key::Character(ref c) = event.logical_key {
@@ -385,6 +568,84 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                                             }
                                         }
                                     }
+                                } else if focused_node.tag_name() == Some("input") && focused_node.get_attribute("type") == Some("date") {
+                                    if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
+                                        if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
+                                            let sw = lr.size.width;
+                                            let sh = lr.size.height;
+                                            
+                                            let format = focused_node.get_attribute("format").unwrap_or("dd/MM/yyyy");
+                                            let cursor_pos = app.form.cursor(focused_key);
+                                            let active_section = app.form.get_date_active_section(focused_key).unwrap_or_else(|| {
+                                                get_date_section_and_bounds(format, cursor_pos).0
+                                            });
+                                            
+                                            let years_range = app.form.get_date_years_range(focused_key);
+                                            let options = crate::render::date_dropdown::generate_date_options(active_section, years_range);
+                                            
+                                            let opt_h = 30.0;
+                                            let input_style = app.styles.get(&dom::node_ptr(&focused_node)).cloned().unwrap_or_default();
+                                            let max_dropdown_h = match input_style.max_height {
+                                                crate::style::Length::Px(v) => v,
+                                                _ => 7.0 * opt_h,
+                                            };
+                                            let total_h = options.len() as f32 * opt_h;
+                                            let dropdown_h = total_h.min(max_dropdown_h);
+                                            let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
+                                            
+                                            if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+                                                let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
+                                                if clicked_idx < options.len() {
+                                                    let selected_val = &options[clicked_idx];
+                                                    let current_val = app.form.get_value(focused_key).to_string();
+                                                    let initial_val = if current_val.is_empty() { format.to_string() } else { current_val };
+                                                    let updated_val = update_date_value_section(&initial_val, format, active_section, selected_val);
+                                                    app.form.set_value(focused_key, updated_val);
+                                                    
+                                                    // Move cursor and update active section
+                                                    let format_lower = format.to_lowercase();
+                                                    if format_lower == "yyyy-mm-dd" {
+                                                        match active_section {
+                                                            DateSection::Year => {
+                                                                app.form.set_cursor(focused_key, 5); // Month start
+                                                                app.form.set_date_active_section(focused_key, DateSection::Month);
+                                                                app.form.set_dropdown_scroll_y(focused_key, 0.0);
+                                                            }
+                                                            DateSection::Month => {
+                                                                app.form.set_cursor(focused_key, 8); // Day start
+                                                                app.form.set_date_active_section(focused_key, DateSection::Day);
+                                                                app.form.set_dropdown_scroll_y(focused_key, 0.0);
+                                                            }
+                                                            DateSection::Day => {
+                                                                app.form.set_cursor(focused_key, 10); // End
+                                                                app.focus_node(None); // Blur
+                                                            }
+                                                        }
+                                                    } else {
+                                                        // dd/MM/yyyy
+                                                        match active_section {
+                                                            DateSection::Day => {
+                                                                app.form.set_cursor(focused_key, 3); // Month start
+                                                                app.form.set_date_active_section(focused_key, DateSection::Month);
+                                                                app.form.set_dropdown_scroll_y(focused_key, 0.0);
+                                                            }
+                                                            DateSection::Month => {
+                                                                app.form.set_cursor(focused_key, 6); // Year start
+                                                                app.form.set_date_active_section(focused_key, DateSection::Year);
+                                                                app.form.set_dropdown_scroll_y(focused_key, 0.0);
+                                                            }
+                                                            DateSection::Year => {
+                                                                app.form.set_cursor(focused_key, 10); // End
+                                                                app.focus_node(None); // Blur
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                clicked_dropdown = true;
+                                                if let Some(w) = &app.window { w.request_redraw(); }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -533,16 +794,39 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                                     }
                                 }
                             }
-                            if app.click_count >= 2 {
-                                app.form.select_all(&key);
+                            let is_date = node.tag_name() == Some("input") && node.get_attribute("type") == Some("date");
+                            if is_date {
+                                let format = node.get_attribute("format").unwrap_or("dd/MM/yyyy");
+                                let mut val = app.form.get_value(&key).to_string();
+                                if val.is_empty() {
+                                    val = format.to_string();
+                                    app.form.set_value(&key, val.clone());
+                                }
+                                let clamped_idx = start_idx.min(val.chars().count());
+                                app.form.set_cursor(&key, clamped_idx);
+                                app.form.set_selection(&key, clamped_idx, clamped_idx);
+                                
+                                let active_sec = get_date_section_and_bounds(format, clamped_idx).0;
+                                app.form.set_date_active_section(&key, active_sec);
+                                app.form.set_dropdown_scroll_y(&key, 0.0);
+                                
+                                let current_yr = crate::form::get_current_year();
+                                app.form.set_date_years_range(&key, (current_yr - 10, current_yr + 10));
+                                
+                                app.caret_on = true;
+                                app.last_caret_toggle = std::time::Instant::now();
                             } else {
-                                app.form.set_cursor(&key, start_idx);
-                                app.form.set_selection(&key, start_idx, start_idx);
+                                if app.click_count >= 2 {
+                                    app.form.select_all(&key);
+                                } else {
+                                    app.form.set_cursor(&key, start_idx);
+                                    app.form.set_selection(&key, start_idx, start_idx);
+                                }
+                                app.caret_on = true;
+                                app.last_caret_toggle = std::time::Instant::now();
+                                app.dragging_select = true;
+                                app.dragging_node = Some(node_ptr);
                             }
-                            app.caret_on = true;
-                            app.last_caret_toggle = std::time::Instant::now();
-                            app.dragging_select = true;
-                            app.dragging_node = Some(node_ptr);
                         }
                         _ => {
                             app.focus_node(None);
@@ -656,50 +940,86 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
     if let Some(ref focused_key) = app.form.focused {
         if let Some(ref dom) = app.dom {
             if let Some(root) = dom.document_element() {
-                fn find_select(node: &std::rc::Rc<crate::dom::Node>, target_key: &str) -> Option<std::rc::Rc<crate::dom::Node>> {
+                fn find_select_or_date(node: &std::rc::Rc<crate::dom::Node>, target_key: &str) -> Option<std::rc::Rc<crate::dom::Node>> {
                     let key = format!("{:p}", crate::dom::node_ptr(node));
                     if key == target_key {
-                        if node.tag_name() == Some("select") {
+                        let tag = node.tag_name().unwrap_or("");
+                        if tag == "select" || tag == "input" {
                             return Some(node.clone());
                         }
                     }
                     for child in &node.children {
-                        if let Some(n) = find_select(child, target_key) {
+                        if let Some(n) = find_select_or_date(child, target_key) {
                             return Some(n);
                         }
                     }
                     None
                 }
-                if let Some(focused_node) = find_select(&root, focused_key) {
-                    if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
-                        if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
-                            let sw = lr.size.width;
-                            let sh = lr.size.height;
-                            
-                            let mut options = Vec::new();
-                            for child in &focused_node.children {
-                                if child.tag_name() == Some("option") {
-                                    options.push(child.clone());
+                if let Some(focused_node) = find_select_or_date(&root, focused_key) {
+                    if focused_node.tag_name() == Some("select") {
+                        if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
+                            if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
+                                let sw = lr.size.width;
+                                let sh = lr.size.height;
+                                
+                                let mut options = Vec::new();
+                                for child in &focused_node.children {
+                                    if child.tag_name() == Some("option") {
+                                        options.push(child.clone());
+                                    }
+                                }
+                                
+                                let opt_h = 30.0;
+                                let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(&focused_node)) {
+                                    match style.max_height {
+                                        crate::style::Length::Px(v) => v,
+                                        _ => 7.0 * opt_h,
+                                    }
+                                } else {
+                                    7.0 * opt_h
+                                };
+                                let total_h = options.len() as f32 * opt_h;
+                                let dropdown_h = total_h.min(max_dropdown_h);
+                                let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
+                                
+                                if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+                                    let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
+                                    if clicked_idx < options.len() {
+                                        dropdown_hover = Some(clicked_idx);
+                                    }
                                 }
                             }
-                            
-                            let opt_h = 30.0;
-                            let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(&focused_node)) {
-                                match style.max_height {
+                        }
+                    } else if focused_node.tag_name() == Some("input") && focused_node.get_attribute("type") == Some("date") {
+                        if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
+                            if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
+                                let sw = lr.size.width;
+                                let sh = lr.size.height;
+                                
+                                let format = focused_node.get_attribute("format").unwrap_or("dd/MM/yyyy");
+                                let cursor_pos = app.form.cursor(focused_key);
+                                let active_section = app.form.get_date_active_section(focused_key).unwrap_or_else(|| {
+                                    get_date_section_and_bounds(format, cursor_pos).0
+                                });
+                                
+                                let years_range = app.form.get_date_years_range(focused_key);
+                                let options = crate::render::date_dropdown::generate_date_options(active_section, years_range);
+                                
+                                let opt_h = 30.0;
+                                let input_style = app.styles.get(&dom::node_ptr(&focused_node)).cloned().unwrap_or_default();
+                                let max_dropdown_h = match input_style.max_height {
                                     crate::style::Length::Px(v) => v,
                                     _ => 7.0 * opt_h,
-                                }
-                            } else {
-                                7.0 * opt_h
-                            };
-                            let total_h = options.len() as f32 * opt_h;
-                            let dropdown_h = total_h.min(max_dropdown_h);
-                            let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
-                            
-                            if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
-                                let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
-                                if clicked_idx < options.len() {
-                                    dropdown_hover = Some(clicked_idx);
+                                };
+                                let total_h = options.len() as f32 * opt_h;
+                                let dropdown_h = total_h.min(max_dropdown_h);
+                                let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
+                                
+                                if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+                                    let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
+                                    if clicked_idx < options.len() {
+                                        dropdown_hover = Some(clicked_idx);
+                                    }
                                 }
                             }
                         }
@@ -774,6 +1094,69 @@ pub(crate) fn handle_mouse_wheel(app: &mut App, delta: MouseScrollDelta) {
                                     let max_scroll = (total_h - dropdown_h).max(0.0);
                                     let new_scroll = (scroll_y + dy).clamp(0.0, max_scroll);
                                     app.form.set_dropdown_scroll_y(focused_key, new_scroll);
+                                    scrolled_dropdown = true;
+                                    if let Some(w) = &app.window { w.request_redraw(); }
+                                }
+                            }
+                        }
+                    } else if focused_node.tag_name() == Some("input") && focused_node.get_attribute("type") == Some("date") {
+                        if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
+                            if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
+                                let sw = lr.size.width;
+                                let sh = lr.size.height;
+                                
+                                let format = focused_node.get_attribute("format").unwrap_or("dd/MM/yyyy");
+                                let cursor_pos = app.form.cursor(focused_key);
+                                let active_section = app.form.get_date_active_section(focused_key).unwrap_or_else(|| {
+                                    get_date_section_and_bounds(format, cursor_pos).0
+                                });
+                                
+                                let years_range = app.form.get_date_years_range(focused_key);
+                                let options = crate::render::date_dropdown::generate_date_options(active_section, years_range);
+                                
+                                let opt_h = 30.0;
+                                let input_style = app.styles.get(&dom::node_ptr(&focused_node)).cloned().unwrap_or_default();
+                                let max_dropdown_h = match input_style.max_height {
+                                    crate::style::Length::Px(v) => v,
+                                    _ => 7.0 * opt_h,
+                                };
+                                let total_h = options.len() as f32 * opt_h;
+                                let dropdown_h = total_h.min(max_dropdown_h);
+                                
+                                if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+                                    let scroll_y = app.form.get_dropdown_scroll_y(focused_key);
+                                    let dy = match delta {
+                                        MouseScrollDelta::LineDelta(_, y) => -y * 20.0,
+                                        MouseScrollDelta::PixelDelta(pos) => -pos.y as f32,
+                                    };
+                                    
+                                    if active_section == DateSection::Year {
+                                        let (mut min_year, mut max_year) = years_range;
+                                        let mut new_scroll = scroll_y + dy;
+                                        
+                                        if new_scroll < 20.0 {
+                                            min_year -= 10;
+                                            app.form.set_date_years_range(focused_key, (min_year, max_year));
+                                            new_scroll += 10.0 * opt_h;
+                                        } else {
+                                            let total_h = ((max_year - min_year + 1) as f32) * opt_h;
+                                            let max_scroll = (total_h - dropdown_h).max(0.0);
+                                            if new_scroll > max_scroll - 20.0 {
+                                                max_year += 10;
+                                                app.form.set_date_years_range(focused_key, (min_year, max_year));
+                                            }
+                                        }
+                                        
+                                        let total_h = ((max_year - min_year + 1) as f32) * opt_h;
+                                        let max_scroll = (total_h - dropdown_h).max(0.0);
+                                        let clamped_scroll = new_scroll.clamp(0.0, max_scroll);
+                                        app.form.set_dropdown_scroll_y(focused_key, clamped_scroll);
+                                    } else {
+                                        let max_scroll = (total_h - dropdown_h).max(0.0);
+                                        let clamped_scroll = (scroll_y + dy).clamp(0.0, max_scroll);
+                                        app.form.set_dropdown_scroll_y(focused_key, clamped_scroll);
+                                    }
+                                    
                                     scrolled_dropdown = true;
                                     if let Some(w) = &app.window { w.request_redraw(); }
                                 }
