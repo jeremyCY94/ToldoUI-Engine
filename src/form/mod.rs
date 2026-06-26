@@ -9,6 +9,13 @@ pub enum DateSection {
     Year,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TimeSection {
+    Hour,
+    Minute,
+    Second,
+}
+
 #[derive(Clone)]
 pub struct FormState {
     pub input_values: HashMap<String, String>,
@@ -20,6 +27,7 @@ pub struct FormState {
     pub dropdown_scroll_y: HashMap<String, f32>,
     pub date_active_section: HashMap<String, DateSection>,
     pub date_years_range: HashMap<String, (i32, i32)>,
+    pub time_active_section: HashMap<String, TimeSection>,
 }
 
 impl FormState {
@@ -34,6 +42,7 @@ impl FormState {
             dropdown_scroll_y: HashMap::new(),
             date_active_section: HashMap::new(),
             date_years_range: HashMap::new(),
+            time_active_section: HashMap::new(),
         }
     }
 
@@ -129,6 +138,14 @@ impl FormState {
 
     pub fn set_date_years_range(&mut self, id: &str, range: (i32, i32)) {
         self.date_years_range.insert(id.to_string(), range);
+    }
+
+    pub fn get_time_active_section(&self, id: &str) -> Option<TimeSection> {
+        self.time_active_section.get(id).copied()
+    }
+
+    pub fn set_time_active_section(&mut self, id: &str, sec: TimeSection) {
+        self.time_active_section.insert(id.to_string(), sec);
     }
 }
 

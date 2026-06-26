@@ -136,6 +136,19 @@ impl Painter {
             mouse_y,
         );
 
+        // Draw the time dropdown overlay if a time input is focused
+        date_dropdown::paint_time_dropdown_overlay(
+            dt,
+            &mut self.fonts,
+            styles,
+            layout,
+            form,
+            &root,
+            scroll_y,
+            mouse_x,
+            mouse_y,
+        );
+
         if loading {
             overlay::paint_loading_overlay(dt, vw, vh);
         }
