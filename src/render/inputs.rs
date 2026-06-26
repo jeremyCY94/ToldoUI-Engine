@@ -204,9 +204,12 @@ pub fn paint_input_text(
 ) {
     let cx = x + lp(&style.padding_left) + style.border.left.width;
     let is_date = node.tag_name() == Some("input") && node.get_attribute("type") == Some("date");
+    let is_time = node.tag_name() == Some("input") && node.get_attribute("type") == Some("time");
     let raw_val = form.get_value(key).to_string();
     let val = if is_date && raw_val.is_empty() {
         node.get_attribute("format").unwrap_or("dd/MM/yyyy").to_string()
+    } else if is_time && raw_val.is_empty() {
+        node.get_attribute("format").unwrap_or("HH:mm").to_string()
     } else {
         raw_val
     };
