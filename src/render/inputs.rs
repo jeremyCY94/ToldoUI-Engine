@@ -202,9 +202,10 @@ pub fn paint_input_text(
     h: f32,
     caret_on: bool,
 ) {
-    let cx = x + lp(&style.padding_left) + style.border.left.width;
     let is_date = node.tag_name() == Some("input") && node.get_attribute("type") == Some("date");
     let is_time = node.tag_name() == Some("input") && node.get_attribute("type") == Some("time");
+    let icon_width = 24.0;
+    let cx = x + lp(&style.padding_left) + style.border.left.width + if is_date { icon_width } else { 0.0 };
     let raw_val = form.get_value(key).to_string();
     let val = if is_date && raw_val.is_empty() {
         node.get_attribute("format").unwrap_or("dd/MM/yyyy").to_string()
@@ -258,7 +259,52 @@ pub fn paint_input_text(
         }
     }
 
-    let mw2 = w - lp(&style.padding_left) - lp(&style.padding_right) - 2.0;
+    let mw2 = w - lp(&style.padding_left) - lp(&style.padding_right) - 2.0 - if is_date { icon_width } else { 0.0 };
+
+    if is_date {
+        let icon_size = 14.0f32;
+        let ix = x + lp(&style.padding_left) + style.border.left.width + 4.0;
+        let iy = y + (h - icon_size) * 0.5;
+
+        let icon_color = if focused {
+            SolidSource::from_unpremultiplied_argb(255, 50, 130, 250)
+        } else {
+            SolidSource::from_unpremultiplied_argb(255, 120, 120, 120)
+        };
+
+        let mut pb = PathBuilder::new();
+        // Body outline
+        pb.rect(ix, iy + 2.0, icon_size, icon_size - 2.0);
+        // Header line
+        pb.move_to(ix, iy + 5.0);
+        pb.line_to(ix + icon_size, iy + 5.0);
+
+        // Binder rings
+        pb.rect(ix + 3.0, iy, 1.5, 3.0);
+        pb.rect(ix + icon_size - 4.5, iy, 1.5, 3.0);
+
+        // Grid points
+        let dot_w = 1.0;
+        let dot_h = 1.0;
+        pb.rect(ix + 3.0, iy + 7.0, dot_w, dot_h);
+        pb.rect(ix + 6.5, iy + 7.0, dot_w, dot_h);
+        pb.rect(ix + 10.0, iy + 7.0, dot_w, dot_h);
+        pb.rect(ix + 3.0, iy + 10.0, dot_w, dot_h);
+        pb.rect(ix + 6.5, iy + 10.0, dot_w, dot_h);
+        pb.rect(ix + 10.0, iy + 10.0, dot_w, dot_h);
+
+        let path = pb.finish();
+        let stroke_style = StrokeStyle {
+            width: 1.0,
+            cap: LineCap::Butt,
+            join: LineJoin::Miter,
+            miter_limit: 10.0,
+            dash_array: Vec::new(),
+            dash_offset: 0.0,
+        };
+        dt.stroke(&path, &Source::Solid(icon_color), &stroke_style, &DrawOptions::new());
+    }
+
     let x1 = (cx + 1.0) as i32;
     let y1 = (y + 2.0) as i32;
     let x2 = (cx + 1.0 + mw2) as i32;
