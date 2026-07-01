@@ -181,19 +181,7 @@ impl App {
         if let Some(ref focused_key) = self.form.focused {
             if let Some(ref dom) = self.dom {
                 if let Some(root) = dom.document_element() {
-                    fn find_node(node: &std::rc::Rc<dom::Node>, target_key: &str) -> Option<std::rc::Rc<dom::Node>> {
-                        let key = format!("{:p}", dom::node_ptr(node));
-                        if key == target_key {
-                            return Some(node.clone());
-                        }
-                        for child in &node.children {
-                            if let Some(n) = find_node(child, target_key) {
-                                return Some(n);
-                            }
-                        }
-                        None
-                    }
-                    if let Some(focused_node) = find_node(&root, focused_key) {
+                    if let Some(focused_node) = dom::Node::find_node_by_key(&root, focused_key) {
                         let node_ptr = dom::node_ptr(&focused_node);
                         let is_over = if focused_node.tag_name() == Some("select") {
                             if let Some((sx, sy)) = get_node_abs_pos(&root, node_ptr, &self.layout, 0.0, -self.scroll_y) {
@@ -206,7 +194,11 @@ impl App {
                                             options_count += 1;
                                         }
                                     }
-                                    let opt_h = 30.0;
+                                    let opt_style = style::resolve_virtual_style(self.stylesheet.as_ref(), "option");
+                                    let opt_h = match opt_style.height {
+                                        style::Length::Px(v) => v,
+                                        _ => 30.0,
+                                    };
                                     let max_dropdown_h = if let Some(style) = self.styles.get(&node_ptr) {
                                         match style.max_height {
                                             style::Length::Px(v) => v,
@@ -229,8 +221,15 @@ impl App {
                                 if let Some((sx, sy)) = get_node_abs_pos(&root, node_ptr, &self.layout, 0.0, -self.scroll_y) {
                                     if let Some(lr) = self.layout.get(node_ptr) {
                                         let input_height = lr.size.height;
-                                        let dw = 220.0f32;
-                                        let dh_total = 210.0f32;
+                                        let cal_style = style::resolve_virtual_style(self.stylesheet.as_ref(), "calendar-picker");
+                                        let dw = match cal_style.width {
+                                            style::Length::Px(v) => v,
+                                            _ => 220.0,
+                                        };
+                                        let dh_total = match cal_style.height {
+                                            style::Length::Px(v) => v,
+                                            _ => 210.0,
+                                        };
                                         self.mouse_x >= sx && self.mouse_x < sx + dw && self.mouse_y >= sy + input_height && self.mouse_y < sy + input_height + dh_total
                                     } else {
                                         false
@@ -253,11 +252,21 @@ impl App {
                                         sec
                                     });
                                     let options = crate::render::date_dropdown::generate_time_options(active_section);
-                                    let opt_h = 30.0;
+                                    let opt_style = style::resolve_virtual_style(self.stylesheet.as_ref(), "option");
+                                    let opt_h = match opt_style.height {
+                                        style::Length::Px(v) => v,
+                                        _ => 30.0,
+                                    };
                                     let input_style = self.styles.get(&node_ptr).cloned().unwrap_or_default();
                                     let max_dropdown_h = match input_style.max_height {
                                         style::Length::Px(v) => v,
-                                        _ => 7.0 * opt_h,
+                                        _ => {
+                                            let time_style = style::resolve_virtual_style(self.stylesheet.as_ref(), "time-picker");
+                                            match time_style.max_height {
+                                                style::Length::Px(v) => v,
+                                                _ => 7.0 * opt_h,
+                                            }
+                                        }
                                     };
                                     let total_h = options.len() as f32 * opt_h;
                                     let dropdown_h = total_h.min(max_dropdown_h);
@@ -429,6 +438,7 @@ impl App {
 
         self.painter.paint(
             dt,
+            self.stylesheet.as_ref(),
             &self.styles,
             &self.layout,
             &self.form,

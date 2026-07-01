@@ -194,6 +194,16 @@ label {
 
 option {
     display: none;
+    height: 30px;
+}
+
+calendar-picker {
+    width: 220px;
+    height: 210px;
+}
+
+time-picker {
+    max-height: 210px;
 }
 
 blockquote {

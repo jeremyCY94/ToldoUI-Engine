@@ -48,7 +48,7 @@ pub fn paint_select_dropdown_overlay(
     mouse_y: f32,
 ) {
     if let Some(ref focused_key) = form.focused {
-        if let Some(focused_node) = find_node_by_key(root, focused_key) {
+        if let Some(focused_node) = Node::find_node_by_key(root, focused_key) {
             if focused_node.tag_name() == Some("select") {
                 let select_pos = get_node_abs_pos(root, dom::node_ptr(&focused_node), layout, 0.0, -scroll_y);
                 if let Some((sx, sy)) = select_pos {
@@ -183,19 +183,6 @@ pub fn get_node_abs_pos(
             if let Some(pos) = get_node_abs_pos(child, target_ptr, layout, x, y) {
                 return Some(pos);
             }
-        }
-    }
-    None
-}
-
-pub fn find_node_by_key(node: &Rc<Node>, target_key: &str) -> Option<Rc<Node>> {
-    let key = format!("{:p}", dom::node_ptr(node));
-    if key == target_key {
-        return Some(node.clone());
-    }
-    for child in &node.children {
-        if let Some(n) = find_node_by_key(child, target_key) {
-            return Some(n);
         }
     }
     None
