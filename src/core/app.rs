@@ -130,6 +130,9 @@ impl App {
 
     pub(crate) fn focus_node(&mut self, key: Option<String>) {
         if self.form.focused != key {
+            if let Some(prev) = self.form.focused.clone() {
+                self.form.set_date_picker_open(&prev, false);
+            }
             self.form.focus(key);
             self.resolve_styles();
         }
