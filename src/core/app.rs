@@ -176,71 +176,180 @@ impl App {
     }
 
     pub(crate) fn update_cursor_icon(&mut self) {
-        let hit = self.hit_test(self.mouse_x, self.mouse_y + self.scroll_y);
-        let needed_cursor = match hit {
-            Some((node, form_type)) => {
-                let node_ptr = dom::node_ptr(&node);
-                let is_date_icon_hover = if node.tag_name() == Some("input") && node.get_attribute("type") == Some("date") {
-                    if let Some(root) = self.dom.as_ref().and_then(|d| d.document_element()) {
-                        if let Some((node_x, _node_y)) = get_node_abs_pos(&root, node_ptr, &self.layout, 0.0, 0.0) {
-                            if let Some(style) = self.styles.get(&node_ptr) {
-                                let padding_left = match style.padding_left { style::Length::Px(v) => v, _ => 0.0 };
-                                let border_left = style.border.left.width;
-                                let icon_start = node_x + padding_left + border_left;
-                                let icon_end = icon_start + 24.0;
-                                self.mouse_x >= icon_start && self.mouse_x < icon_end
+        let mut needed_cursor = None;
+
+        if let Some(ref focused_key) = self.form.focused {
+            if let Some(ref dom) = self.dom {
+                if let Some(root) = dom.document_element() {
+                    fn find_node(node: &std::rc::Rc<dom::Node>, target_key: &str) -> Option<std::rc::Rc<dom::Node>> {
+                        let key = format!("{:p}", dom::node_ptr(node));
+                        if key == target_key {
+                            return Some(node.clone());
+                        }
+                        for child in &node.children {
+                            if let Some(n) = find_node(child, target_key) {
+                                return Some(n);
+                            }
+                        }
+                        None
+                    }
+                    if let Some(focused_node) = find_node(&root, focused_key) {
+                        let node_ptr = dom::node_ptr(&focused_node);
+                        let is_over = if focused_node.tag_name() == Some("select") {
+                            if let Some((sx, sy)) = get_node_abs_pos(&root, node_ptr, &self.layout, 0.0, -self.scroll_y) {
+                                if let Some(lr) = self.layout.get(node_ptr) {
+                                    let sw = lr.size.width;
+                                    let sh = lr.size.height;
+                                    let mut options_count = 0;
+                                    for child in &focused_node.children {
+                                        if child.tag_name() == Some("option") {
+                                            options_count += 1;
+                                        }
+                                    }
+                                    let opt_h = 30.0;
+                                    let max_dropdown_h = if let Some(style) = self.styles.get(&node_ptr) {
+                                        match style.max_height {
+                                            style::Length::Px(v) => v,
+                                            _ => 7.0 * opt_h,
+                                        }
+                                    } else {
+                                        7.0 * opt_h
+                                    };
+                                    let total_h = options_count as f32 * opt_h;
+                                    let dropdown_h = total_h.min(max_dropdown_h);
+                                    self.mouse_x >= sx && self.mouse_x < sx + sw && self.mouse_y >= sy + sh && self.mouse_y < sy + sh + dropdown_h
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else if focused_node.tag_name() == Some("input") && focused_node.get_attribute("type") == Some("date") {
+                            if self.form.is_date_picker_open(focused_key) {
+                                if let Some((sx, sy)) = get_node_abs_pos(&root, node_ptr, &self.layout, 0.0, -self.scroll_y) {
+                                    if let Some(lr) = self.layout.get(node_ptr) {
+                                        let input_height = lr.size.height;
+                                        let dw = 220.0f32;
+                                        let dh_total = 210.0f32;
+                                        self.mouse_x >= sx && self.mouse_x < sx + dw && self.mouse_y >= sy + input_height && self.mouse_y < sy + input_height + dh_total
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else if focused_node.tag_name() == Some("input") && focused_node.get_attribute("type") == Some("time") {
+                            if let Some((sx, sy)) = get_node_abs_pos(&root, node_ptr, &self.layout, 0.0, -self.scroll_y) {
+                                if let Some(lr) = self.layout.get(node_ptr) {
+                                    let sw = lr.size.width;
+                                    let sh = lr.size.height;
+                                    let format = focused_node.get_attribute("format").unwrap_or("HH:mm");
+                                    let cursor_pos = self.form.cursor(focused_key);
+                                    let active_section = self.form.get_time_active_section(focused_key).unwrap_or_else(|| {
+                                        let (sec, _, _) = crate::core::input::get_time_section_and_bounds(format, cursor_pos);
+                                        sec
+                                    });
+                                    let options = crate::render::date_dropdown::generate_time_options(active_section);
+                                    let opt_h = 30.0;
+                                    let input_style = self.styles.get(&node_ptr).cloned().unwrap_or_default();
+                                    let max_dropdown_h = match input_style.max_height {
+                                        style::Length::Px(v) => v,
+                                        _ => 7.0 * opt_h,
+                                    };
+                                    let total_h = options.len() as f32 * opt_h;
+                                    let dropdown_h = total_h.min(max_dropdown_h);
+                                    self.mouse_x >= sx && self.mouse_x < sx + sw && self.mouse_y >= sy + sh && self.mouse_y < sy + sh + dropdown_h
+                                } else {
+                                    false
+                                }
                             } else {
                                 false
                             }
                         } else {
                             false
-                        }
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
+                        };
 
-                if is_date_icon_hover {
-                    CursorIcon::Pointer
-                } else {
-                    let css_cursor = self.styles.get(&node_ptr)
-                        .map(|style| style.cursor)
-                        .unwrap_or(style::Cursor::Auto);
-
-                    match css_cursor {
-                        style::Cursor::Default => CursorIcon::Default,
-                        style::Cursor::Pointer => CursorIcon::Pointer,
-                        style::Cursor::Text => CursorIcon::Text,
-                        style::Cursor::Wait => CursorIcon::Wait,
-                        style::Cursor::Help => CursorIcon::Help,
-                        style::Cursor::NotAllowed => CursorIcon::NotAllowed,
-                        style::Cursor::Progress => CursorIcon::Progress,
-                        style::Cursor::Grab => CursorIcon::Grab,
-                        style::Cursor::Grabbing => CursorIcon::Grabbing,
-                        style::Cursor::Move => CursorIcon::Move,
-                        style::Cursor::ZoomIn => CursorIcon::ZoomIn,
-                        style::Cursor::ZoomOut => CursorIcon::ZoomOut,
-                        style::Cursor::Auto => match form_type {
-                            "text" | "textarea" => CursorIcon::Text,
-                            "button" | "select" | "link" | "checkbox" | "radio" => CursorIcon::Pointer,
-                            _ => CursorIcon::Default,
+                        if is_over {
+                            needed_cursor = Some(CursorIcon::Pointer);
                         }
                     }
                 }
             }
+        }
+
+        let needed_cursor = match needed_cursor {
+            Some(cur) => cur,
             None => {
-                let win = match &self.window { Some(w) => w.clone(), None => return };
-                let size = win.inner_size();
-                let ww = size.width.max(100) as f32;
-                let wh = size.height.max(100) as f32;
-                let sb_w = 10.0;
-                let sb_x = ww - sb_w - 2.0;
-                if self.mouse_x >= sb_x && self.mouse_x < sb_x + sb_w && self.mouse_y >= 2.0 && self.mouse_y < wh - 2.0 {
-                    CursorIcon::Pointer
-                } else {
-                    CursorIcon::Default
+                let hit = self.hit_test(self.mouse_x, self.mouse_y + self.scroll_y);
+                match hit {
+                    Some((node, form_type)) => {
+                        let node_ptr = dom::node_ptr(&node);
+                        let is_date_icon_hover = if node.tag_name() == Some("input") && node.get_attribute("type") == Some("date") {
+                            if let Some(root) = self.dom.as_ref().and_then(|d| d.document_element()) {
+                                if let Some((node_x, _node_y)) = get_node_abs_pos(&root, node_ptr, &self.layout, 0.0, 0.0) {
+                                    if let Some(style) = self.styles.get(&node_ptr) {
+                                        let padding_left = match style.padding_left { style::Length::Px(v) => v, _ => 0.0 };
+                                        let border_left = style.border.left.width;
+                                        let icon_start = node_x + padding_left + border_left;
+                                        let icon_end = icon_start + 24.0;
+                                        self.mouse_x >= icon_start && self.mouse_x < icon_end
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        };
+
+                        if is_date_icon_hover {
+                            CursorIcon::Pointer
+                        } else {
+                            let css_cursor = self.styles.get(&node_ptr)
+                                .map(|style| style.cursor)
+                                .unwrap_or(style::Cursor::Auto);
+
+                            match css_cursor {
+                                style::Cursor::Default => CursorIcon::Default,
+                                style::Cursor::Pointer => CursorIcon::Pointer,
+                                style::Cursor::Text => CursorIcon::Text,
+                                style::Cursor::Wait => CursorIcon::Wait,
+                                style::Cursor::Help => CursorIcon::Help,
+                                style::Cursor::NotAllowed => CursorIcon::NotAllowed,
+                                style::Cursor::Progress => CursorIcon::Progress,
+                                style::Cursor::Grab => CursorIcon::Grab,
+                                style::Cursor::Grabbing => CursorIcon::Grabbing,
+                                style::Cursor::Move => CursorIcon::Move,
+                                style::Cursor::ZoomIn => CursorIcon::ZoomIn,
+                                style::Cursor::ZoomOut => CursorIcon::ZoomOut,
+                                style::Cursor::Auto => match form_type {
+                                    "text" | "textarea" => CursorIcon::Text,
+                                    "button" | "select" | "link" | "checkbox" | "radio" => CursorIcon::Pointer,
+                                    _ => CursorIcon::Default,
+                                }
+                            }
+                        }
+                    }
+                    None => {
+                        let win = match &self.window { Some(w) => w.clone(), None => return };
+                        let size = win.inner_size();
+                        let ww = size.width.max(100) as f32;
+                        let wh = size.height.max(100) as f32;
+                        let sb_w = 10.0;
+                        let sb_x = ww - sb_w - 2.0;
+                        if self.mouse_x >= sb_x && self.mouse_x < sb_x + sb_w && self.mouse_y >= 2.0 && self.mouse_y < wh - 2.0 {
+                            CursorIcon::Pointer
+                        } else {
+                            CursorIcon::Default
+                        }
+                    }
                 }
             }
         };

@@ -88,7 +88,7 @@ impl ApplicationHandler for App {
                     is_select = check_is_select(&root, focused_key);
                 }
             }
-            if !is_select {
+            if !is_select && !self.form.is_date_picker_open(focused_key) {
                 needs_blink = true;
             }
         }
