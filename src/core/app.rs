@@ -179,27 +179,54 @@ impl App {
         let hit = self.hit_test(self.mouse_x, self.mouse_y + self.scroll_y);
         let needed_cursor = match hit {
             Some((node, form_type)) => {
-                let css_cursor = self.styles.get(&dom::node_ptr(&node))
-                    .map(|style| style.cursor)
-                    .unwrap_or(style::Cursor::Auto);
+                let node_ptr = dom::node_ptr(&node);
+                let is_date_icon_hover = if node.tag_name() == Some("input") && node.get_attribute("type") == Some("date") {
+                    if let Some(root) = self.dom.as_ref().and_then(|d| d.document_element()) {
+                        if let Some((node_x, _node_y)) = get_node_abs_pos(&root, node_ptr, &self.layout, 0.0, 0.0) {
+                            if let Some(style) = self.styles.get(&node_ptr) {
+                                let padding_left = match style.padding_left { style::Length::Px(v) => v, _ => 0.0 };
+                                let border_left = style.border.left.width;
+                                let icon_start = node_x + padding_left + border_left;
+                                let icon_end = icon_start + 24.0;
+                                self.mouse_x >= icon_start && self.mouse_x < icon_end
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
 
-                match css_cursor {
-                    style::Cursor::Default => CursorIcon::Default,
-                    style::Cursor::Pointer => CursorIcon::Pointer,
-                    style::Cursor::Text => CursorIcon::Text,
-                    style::Cursor::Wait => CursorIcon::Wait,
-                    style::Cursor::Help => CursorIcon::Help,
-                    style::Cursor::NotAllowed => CursorIcon::NotAllowed,
-                    style::Cursor::Progress => CursorIcon::Progress,
-                    style::Cursor::Grab => CursorIcon::Grab,
-                    style::Cursor::Grabbing => CursorIcon::Grabbing,
-                    style::Cursor::Move => CursorIcon::Move,
-                    style::Cursor::ZoomIn => CursorIcon::ZoomIn,
-                    style::Cursor::ZoomOut => CursorIcon::ZoomOut,
-                    style::Cursor::Auto => match form_type {
-                        "text" | "textarea" => CursorIcon::Text,
-                        "button" | "select" | "link" | "checkbox" | "radio" => CursorIcon::Pointer,
-                        _ => CursorIcon::Default,
+                if is_date_icon_hover {
+                    CursorIcon::Pointer
+                } else {
+                    let css_cursor = self.styles.get(&node_ptr)
+                        .map(|style| style.cursor)
+                        .unwrap_or(style::Cursor::Auto);
+
+                    match css_cursor {
+                        style::Cursor::Default => CursorIcon::Default,
+                        style::Cursor::Pointer => CursorIcon::Pointer,
+                        style::Cursor::Text => CursorIcon::Text,
+                        style::Cursor::Wait => CursorIcon::Wait,
+                        style::Cursor::Help => CursorIcon::Help,
+                        style::Cursor::NotAllowed => CursorIcon::NotAllowed,
+                        style::Cursor::Progress => CursorIcon::Progress,
+                        style::Cursor::Grab => CursorIcon::Grab,
+                        style::Cursor::Grabbing => CursorIcon::Grabbing,
+                        style::Cursor::Move => CursorIcon::Move,
+                        style::Cursor::ZoomIn => CursorIcon::ZoomIn,
+                        style::Cursor::ZoomOut => CursorIcon::ZoomOut,
+                        style::Cursor::Auto => match form_type {
+                            "text" | "textarea" => CursorIcon::Text,
+                            "button" | "select" | "link" | "checkbox" | "radio" => CursorIcon::Pointer,
+                            _ => CursorIcon::Default,
+                        }
                     }
                 }
             }
