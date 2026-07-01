@@ -226,6 +226,12 @@ pub fn parse_date_value(val: &str, format: &str) -> Option<(u32, u32, i32)> {
         let y: i32 = chars[0..4].iter().collect::<String>().parse().ok()?;
         let m: u32 = chars[5..7].iter().collect::<String>().parse().ok()?;
         let d: u32 = chars[8..10].iter().collect::<String>().parse().ok()?;
+        if m < 1 || m > 12 {
+            return None;
+        }
+        if d < 1 || d > days_in_month(y, m) {
+            return None;
+        }
         Some((d, m, y))
     } else {
         // dd/MM/yyyy
@@ -235,11 +241,20 @@ pub fn parse_date_value(val: &str, format: &str) -> Option<(u32, u32, i32)> {
         let d: u32 = chars[0..2].iter().collect::<String>().parse().ok()?;
         let m: u32 = chars[3..5].iter().collect::<String>().parse().ok()?;
         let y: i32 = chars[6..10].iter().collect::<String>().parse().ok()?;
+        if m < 1 || m > 12 {
+            return None;
+        }
+        if d < 1 || d > days_in_month(y, m) {
+            return None;
+        }
         Some((d, m, y))
     }
 }
 
 pub fn day_of_week(y: i32, m: u32, d: u32) -> u32 {
+    if m < 1 || m > 12 {
+        return 0;
+    }
     let t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
     let mut y = y;
     if m < 3 {
