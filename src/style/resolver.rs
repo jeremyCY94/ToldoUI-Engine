@@ -11,11 +11,32 @@ pub type StyleMap = HashMap<*const Node, ComputedStyle>;
 
 static USER_AGENT_STYLESHEET: OnceLock<Stylesheet> = OnceLock::new();
 
-fn get_user_agent_stylesheet() -> &'static Stylesheet {
+pub fn get_user_agent_stylesheet() -> &'static Stylesheet {
     USER_AGENT_STYLESHEET.get_or_init(|| {
         let css = include_str!("user_agent.css");
         Stylesheet::parse(css)
     })
+}
+
+pub fn resolve_virtual_style(stylesheet: Option<&Stylesheet>, tag_name: &str) -> ComputedStyle {
+    let temp_node = Node::new_element(tag_name.to_string(), HashMap::new());
+    let mut style = ComputedStyle::default();
+
+    // Match UA styles
+    let ua_matched = get_user_agent_stylesheet().match_rules(&temp_node, None, None);
+    for (d, _) in ua_matched {
+        apply_decls(&mut style, d);
+    }
+
+    // Match document styles
+    if let Some(ss) = stylesheet {
+        let matched = ss.match_rules(&temp_node, None, None);
+        for (d, _) in matched {
+            apply_decls(&mut style, d);
+        }
+    }
+
+    style
 }
 
 pub fn resolve_styles(stylesheet: &Stylesheet, root: Rc<Node>, hovered_node: Option<*const Node>, focused_node_key: Option<&str>) -> StyleMap {

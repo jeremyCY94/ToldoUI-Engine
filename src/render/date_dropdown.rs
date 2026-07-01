@@ -7,7 +7,7 @@ use crate::form::{FormState, DateSection, TimeSection};
 use crate::layout::LayoutEngine;
 use crate::style::StyleMap;
 use super::text::render_single_line_text;
-use super::select::{get_node_abs_pos, find_node_by_key};
+use super::select::get_node_abs_pos;
 
 pub fn generate_date_options(section: DateSection, years_range: (i32, i32)) -> Vec<String> {
     match section {
@@ -70,6 +70,7 @@ fn draw_circle_path(cx: f32, cy: f32, r: f32) -> Path {
 pub fn paint_date_dropdown_overlay(
     dt: &mut DrawTarget,
     fonts: &mut HashMap<String, Font<'static>>,
+    stylesheet: Option<&crate::css::Stylesheet>,
     styles: &StyleMap,
     layout: &LayoutEngine,
     form: &FormState,
@@ -79,15 +80,22 @@ pub fn paint_date_dropdown_overlay(
     mouse_y: f32,
 ) {
     if let Some(ref focused_key) = form.focused {
-        if let Some(focused_node) = find_node_by_key(root, focused_key) {
+        if let Some(focused_node) = Node::find_node_by_key(root, focused_key) {
             let is_date = focused_node.tag_name() == Some("input") && focused_node.get_attribute("type") == Some("date");
             if is_date && form.is_date_picker_open(focused_key) {
                 let select_pos = get_node_abs_pos(root, dom::node_ptr(&focused_node), layout, 0.0, -scroll_y);
                 if let Some((sx, sy)) = select_pos {
                     if let Some(lr) = layout.get(dom::node_ptr(&focused_node)) {
                         let input_height = lr.size.height;
-                        let dw = 220.0f32; // calendar width
-                        let dh_total = 210.0f32; // calendar height
+                        let cal_style = crate::style::resolve_virtual_style(stylesheet, "calendar-picker");
+                        let dw = match cal_style.width {
+                            crate::style::Length::Px(v) => v,
+                            _ => 220.0,
+                        };
+                        let dh_total = match cal_style.height {
+                            crate::style::Length::Px(v) => v,
+                            _ => 210.0,
+                        };
                         let input_style = styles.get(&dom::node_ptr(&focused_node)).cloned().unwrap_or_default();
                         
                         // Draw shadow
@@ -178,7 +186,7 @@ pub fn paint_date_dropdown_overlay(
                         
                         // Render Days grid
                         let grid_y = dow_y + dow_h;
-                        let row_h = 25.0f32;
+                        let row_h = (dh_total - 60.0) / 6.0;
                         
                         let first_dow = crate::form::day_of_week(y, m, 1);
                         let total_days = crate::form::days_in_month(y, m);
@@ -289,6 +297,7 @@ pub fn get_time_section_value(val: &str, format: &str, section: TimeSection) -> 
 pub fn paint_time_dropdown_overlay(
     dt: &mut DrawTarget,
     fonts: &mut HashMap<String, Font<'static>>,
+    stylesheet: Option<&crate::css::Stylesheet>,
     styles: &StyleMap,
     layout: &LayoutEngine,
     form: &FormState,
@@ -298,7 +307,7 @@ pub fn paint_time_dropdown_overlay(
     mouse_y: f32,
 ) {
     if let Some(ref focused_key) = form.focused {
-        if let Some(focused_node) = find_node_by_key(root, focused_key) {
+        if let Some(focused_node) = Node::find_node_by_key(root, focused_key) {
             let is_time = focused_node.tag_name() == Some("input") && focused_node.get_attribute("type") == Some("time");
             if is_time {
                 let format = focused_node.get_attribute("format").unwrap_or("HH:mm");
@@ -333,11 +342,21 @@ pub fn paint_time_dropdown_overlay(
                         let sh = lr.size.height;
                         
                         if !options.is_empty() {
-                            let opt_h = 30.0;
+                            let opt_style = crate::style::resolve_virtual_style(stylesheet, "option");
+                            let opt_h = match opt_style.height {
+                                crate::style::Length::Px(v) => v,
+                                _ => 30.0,
+                            };
                             let input_style = styles.get(&dom::node_ptr(&focused_node)).cloned().unwrap_or_default();
                             let max_dropdown_h = match input_style.max_height {
                                 crate::style::Length::Px(v) => v,
-                                _ => 7.0 * opt_h,
+                                _ => {
+                                    let time_style = crate::style::resolve_virtual_style(stylesheet, "time-picker");
+                                    match time_style.max_height {
+                                        crate::style::Length::Px(v) => v,
+                                        _ => 7.0 * opt_h,
+                                    }
+                                }
                             };
                             let total_h = options.len() as f32 * opt_h;
                             let dropdown_h = total_h.min(max_dropdown_h);

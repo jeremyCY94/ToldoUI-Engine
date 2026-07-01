@@ -117,6 +117,20 @@ impl Node {
         }
     }
 
+    pub fn find_node_by_key(root: &Rc<Node>, target_key: &str) -> Option<Rc<Node>> {
+        let mut stack = vec![root.clone()];
+        while let Some(node) = stack.pop() {
+            let key = format!("{:p}", Rc::as_ptr(&node));
+            if key == target_key {
+                return Some(node);
+            }
+            for child in node.children.iter().rev() {
+                stack.push(child.clone());
+            }
+        }
+        None
+    }
+
     pub fn add_child(parent: &Rc<Node>, child: &Rc<Node>) {
         child.set_parent(&**parent as *const Node);
         unsafe { (&mut *Rc::as_ptr(&parent).cast_mut()).children.push(child.clone()); }

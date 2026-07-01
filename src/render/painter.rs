@@ -42,6 +42,7 @@ impl Painter {
     pub fn paint(
         &mut self,
         dt: &mut DrawTarget,
+        stylesheet: Option<&crate::css::Stylesheet>,
         styles: &StyleMap,
         layout: &LayoutEngine,
         form: &FormState,
@@ -127,6 +128,7 @@ impl Painter {
         date_dropdown::paint_date_dropdown_overlay(
             dt,
             &mut self.fonts,
+            stylesheet,
             styles,
             layout,
             form,
@@ -140,6 +142,7 @@ impl Painter {
         date_dropdown::paint_time_dropdown_overlay(
             dt,
             &mut self.fonts,
+            stylesheet,
             styles,
             layout,
             form,

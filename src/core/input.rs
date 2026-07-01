@@ -6,7 +6,7 @@ use crate::dom;
 use crate::form::actions::{delete_selected_text, get_selected_text, insert_text};
 use crate::render::overlay::{ModalState, ModalType};
 use crate::form::{DateSection, TimeSection};
-use crate::render::select::find_node_by_key;
+
 
 use crate::core::app::{App, get_node_abs_pos};
 
@@ -224,7 +224,7 @@ pub(crate) fn handle_keyboard(app: &mut App, event: winit::event::KeyEvent) {
             let mut time_format = String::new();
             if let Some(ref dom) = app.dom {
                 if let Some(root) = dom.document_element() {
-                    if let Some(node) = find_node_by_key(&root, focused) {
+                    if let Some(node) = dom::Node::find_node_by_key(&root, focused) {
                         if node.tag_name() == Some("input") {
                             let itype = node.get_attribute("type").unwrap_or("text");
                             if itype == "date" {
@@ -623,143 +623,28 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
         match state {
             ElementState::Pressed => {
                 let now = std::time::Instant::now();
-                let dt = now - app.last_click_time;
+                                let dt = now - app.last_click_time;
                 if dt.as_millis() < 400 && (app.mouse_x - app.last_click_pos.0).abs() < 8.0 && (app.mouse_y - app.last_click_pos.1).abs() < 8.0 {
                     app.click_count += 1;
                 } else { app.click_count = 1; }
                 app.last_click_time = now;
-                app.last_click_pos = (app.mouse_x, app.mouse_y);
-
-                let mut clicked_dropdown = false;
+                app.last_click_pos = (app.mouse_x, app.mouse_y);                let mut clicked_dropdown = false;
                 if let Some(ref focused_key) = app.form.focused.clone() {
                     if let Some(ref dom) = app.dom {
                         if let Some(root) = dom.document_element() {
-                            fn find_node(node: &std::rc::Rc<dom::Node>, target_key: &str) -> Option<std::rc::Rc<dom::Node>> {
-                                let key = format!("{:p}", dom::node_ptr(node));
-                                if key == target_key {
-                                    return Some(node.clone());
-                                }
-                                for child in &node.children {
-                                    if let Some(n) = find_node(child, target_key) {
-                                        return Some(n);
-                                    }
-                                }
-                                None
-                            }
-                            if let Some(focused_node) = find_node(&root, focused_key) {
+                            if let Some(focused_node) = dom::Node::find_node_by_key(&root, focused_key) {
                                 if focused_node.tag_name() == Some("select") {
                                     if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
                                         if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
                                             let sw = lr.size.width;
                                             let sh = lr.size.height;
-                                            
-                                            let mut options = Vec::new();
-                                            for child in &focused_node.children {
-                                                if child.tag_name() == Some("option") {
-                                                    options.push(child.clone());
-                                                }
-                                            }
-                                            
-                                            let opt_h = 30.0;
-                                            let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(&focused_node)) {
-                                                match style.max_height {
-                                                    crate::style::Length::Px(v) => v,
-                                                    _ => 7.0 * opt_h,
-                                                }
-                                            } else {
-                                                7.0 * opt_h
-                                            };
-                                            let total_h = options.len() as f32 * opt_h;
-                                            let dropdown_h = total_h.min(max_dropdown_h);
-                                            let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
-                                            
-                                            if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
-                                                let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
-                                                if clicked_idx < options.len() {
-                                                    let selected_option = &options[clicked_idx];
-                                                    let option_text = selected_option.children_text().trim().to_string();
-                                                    app.form.set_value(focused_key, option_text);
-                                                    
-                                                    for opt in &options {
-                                                        let opt_key = format!("{:p}", dom::node_ptr(opt));
-                                                        app.form.checked.insert(opt_key, false);
-                                                    }
-                                                    let selected_opt_key = format!("{:p}", dom::node_ptr(selected_option));
-                                                    app.form.checked.insert(selected_opt_key, true);
-                                                }
-                                                app.focus_node(None);
-                                                clicked_dropdown = true;
-                                                if let Some(w) = &app.window { w.request_redraw(); }
-                                            }
+                                            clicked_dropdown = handle_select_click(app, focused_key, &focused_node, sx, sy, sw, sh);
                                         }
                                     }
                                 } else if focused_node.tag_name() == Some("input") && focused_node.get_attribute("type") == Some("date") {
                                     if app.form.is_date_picker_open(focused_key) {
                                         if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
-                                            if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
-                                                let input_height = lr.size.height;
-                                                let dw = 220.0f32; // calendar width
-                                                let dh_total = 210.0f32; // calendar height
-                                                
-                                                if app.mouse_x >= sx && app.mouse_x < sx + dw && app.mouse_y >= sy + input_height && app.mouse_y < sy + input_height + dh_total {
-                                                    clicked_dropdown = true;
-                                                    
-                                                    let my = app.mouse_y - (sy + input_height);
-                                                    let mx = app.mouse_x - sx;
-                                                    
-                                                    let (mut m, mut y) = app.form.get_date_picker_month_year(focused_key);
-                                                    
-                                                    if my < 35.0 {
-                                                        // Click in header
-                                                        if mx < 35.0 {
-                                                            // Clicked "<"
-                                                            if m == 1 {
-                                                                m = 12;
-                                                                y -= 1;
-                                                            } else {
-                                                                m -= 1;
-                                                            }
-                                                            app.form.set_date_picker_month_year(focused_key, m, y);
-                                                        } else if mx >= dw - 35.0 {
-                                                            // Clicked ">"
-                                                            if m == 12 {
-                                                                m = 1;
-                                                                y += 1;
-                                                            } else {
-                                                                m += 1;
-                                                            }
-                                                            app.form.set_date_picker_month_year(focused_key, m, y);
-                                                        }
-                                                    } else if my >= 60.0 {
-                                                        // Click in days grid
-                                                        let grid_y = my - 60.0;
-                                                        let col = (mx / (dw / 7.0)) as u32;
-                                                        let row = (grid_y / 25.0) as u32;
-                                                        
-                                                        let first_dow = crate::form::day_of_week(y, m, 1);
-                                                        let total_days = crate::form::days_in_month(y, m);
-                                                        
-                                                        let idx = row * 7 + col;
-                                                        if idx >= first_dow && idx < first_dow + total_days {
-                                                            let day = idx - first_dow + 1;
-                                                            let format = focused_node.get_attribute("format").unwrap_or("dd/MM/yyyy");
-                                                            
-                                                            let new_val = if format.to_lowercase() == "yyyy-mm-dd" {
-                                                                format!("{:04}-{:02}-{:02}", y, m, day)
-                                                            } else {
-                                                                format!("{:02}/{:02}/{:04}", day, m, y)
-                                                            };
-                                                            
-                                                            app.form.set_value(focused_key, new_val);
-                                                            app.form.set_date_picker_open(focused_key, false);
-                                                            
-                                                            app.form.set_cursor(focused_key, 10);
-                                                            app.form.clear_selection(focused_key);
-                                                        }
-                                                    }
-                                                    if let Some(w) = &app.window { w.request_redraw(); }
-                                                }
-                                            }
+                                            clicked_dropdown = handle_date_picker_click(app, focused_key, &focused_node, sx, sy);
                                         }
                                     }
                                 } else if focused_node.tag_name() == Some("input") && focused_node.get_attribute("type") == Some("time") {
@@ -767,72 +652,7 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                                         if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
                                             let sw = lr.size.width;
                                             let sh = lr.size.height;
-                                            
-                                            let format = focused_node.get_attribute("format").unwrap_or("HH:mm");
-                                            let cursor_pos = app.form.cursor(focused_key);
-                                            let active_section = app.form.get_time_active_section(focused_key).unwrap_or_else(|| {
-                                                get_time_section_and_bounds(format, cursor_pos).0
-                                            });
-                                            
-                                            let options = crate::render::date_dropdown::generate_time_options(active_section);
-                                            
-                                            let opt_h = 30.0;
-                                            let input_style = app.styles.get(&dom::node_ptr(&focused_node)).cloned().unwrap_or_default();
-                                            let max_dropdown_h = match input_style.max_height {
-                                                crate::style::Length::Px(v) => v,
-                                                _ => 7.0 * opt_h,
-                                            };
-                                            let total_h = options.len() as f32 * opt_h;
-                                            let dropdown_h = total_h.min(max_dropdown_h);
-                                            let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
-                                            
-                                            if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
-                                                let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
-                                                if clicked_idx < options.len() {
-                                                    let selected_val = &options[clicked_idx];
-                                                    let current_val = app.form.get_value(focused_key).to_string();
-                                                    let initial_val = if current_val.is_empty() { format.to_string() } else { current_val };
-                                                    let updated_val = update_time_value_section(&initial_val, format, active_section, selected_val);
-                                                    app.form.set_value(focused_key, updated_val);
-                                                    
-                                                    // Move cursor and update active section
-                                                    let format_lower = format.to_lowercase();
-                                                    if format_lower == "hh:mm:ss" {
-                                                        match active_section {
-                                                            TimeSection::Hour => {
-                                                                app.form.set_cursor(focused_key, 3); // Minute start
-                                                                app.form.set_time_active_section(focused_key, TimeSection::Minute);
-                                                                app.form.set_dropdown_scroll_y(focused_key, 0.0);
-                                                            }
-                                                            TimeSection::Minute => {
-                                                                app.form.set_cursor(focused_key, 6); // Second start
-                                                                app.form.set_time_active_section(focused_key, TimeSection::Second);
-                                                                app.form.set_dropdown_scroll_y(focused_key, 0.0);
-                                                            }
-                                                            TimeSection::Second => {
-                                                                app.form.set_cursor(focused_key, 8); // End
-                                                                app.focus_node(None); // Blur
-                                                            }
-                                                        }
-                                                    } else {
-                                                        // HH:mm
-                                                        match active_section {
-                                                            TimeSection::Hour => {
-                                                                app.form.set_cursor(focused_key, 3); // Minute start
-                                                                app.form.set_time_active_section(focused_key, TimeSection::Minute);
-                                                                app.form.set_dropdown_scroll_y(focused_key, 0.0);
-                                                            }
-                                                            TimeSection::Minute => {
-                                                                app.form.set_cursor(focused_key, 5); // End
-                                                                app.focus_node(None); // Blur
-                                                            }
-                                                            TimeSection::Second => {}
-                                                        }
-                                                    }
-                                                }
-                                                clicked_dropdown = true;
-                                                if let Some(w) = &app.window { w.request_redraw(); }
-                                            }
+                                            clicked_dropdown = handle_time_picker_click(app, focused_key, &focused_node, sx, sy, sw, sh);
                                         }
                                     }
                                 }
@@ -849,19 +669,13 @@ pub(crate) fn handle_mouse_input(app: &mut App, state: ElementState, button: Mou
                     // Walk up to find if there is an ancestor label
                     let mut label_ancestor = None;
                     {
-                        let mut curr: *const dom::Node = dom::node_ptr(&node);
-                        unsafe {
-                            while !curr.is_null() {
-                                if (*curr).tag_name() == Some("label") {
-                                    label_ancestor = Some(&*curr);
-                                    break;
-                                }
-                                if let Some(parent) = (*curr).get_parent() {
-                                    curr = parent as *const dom::Node;
-                                } else {
-                                    break;
-                                }
+                        let mut curr = Some(&*node);
+                        while let Some(n) = curr {
+                            if n.tag_name() == Some("label") {
+                                label_ancestor = Some(n);
+                                break;
                             }
+                            curr = n.get_parent();
                         }
                     }
                     
@@ -1173,68 +987,33 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
 
     app.update_cursor_icon();
     let mut needs_redraw = app.update_hover();
-    
     let mut dropdown_hover = None;
-    if let Some(ref focused_key) = app.form.focused {
+    if let Some(focused_key) = app.form.focused.clone() {
         if let Some(ref dom) = app.dom {
             if let Some(root) = dom.document_element() {
-                fn find_select_or_date(node: &std::rc::Rc<crate::dom::Node>, target_key: &str) -> Option<std::rc::Rc<crate::dom::Node>> {
-                    let key = format!("{:p}", crate::dom::node_ptr(node));
-                    if key == target_key {
-                        let tag = node.tag_name().unwrap_or("");
-                        if tag == "select" || tag == "input" {
-                            return Some(node.clone());
-                        }
-                    }
-                    for child in &node.children {
-                        if let Some(n) = find_select_or_date(child, target_key) {
-                            return Some(n);
-                        }
-                    }
-                    None
-                }
-                if let Some(focused_node) = find_select_or_date(&root, focused_key) {
+                if let Some(focused_node) = dom::Node::find_node_by_key(&root, &focused_key) {
                     if focused_node.tag_name() == Some("select") {
                         if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
                             if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
                                 let sw = lr.size.width;
                                 let sh = lr.size.height;
-                                
-                                let mut options = Vec::new();
-                                for child in &focused_node.children {
-                                    if child.tag_name() == Some("option") {
-                                        options.push(child.clone());
-                                    }
-                                }
-                                
-                                let opt_h = 30.0;
-                                let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(&focused_node)) {
-                                    match style.max_height {
-                                        crate::style::Length::Px(v) => v,
-                                        _ => 7.0 * opt_h,
-                                    }
-                                } else {
-                                    7.0 * opt_h
-                                };
-                                let total_h = options.len() as f32 * opt_h;
-                                let dropdown_h = total_h.min(max_dropdown_h);
-                                let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
-                                
-                                if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
-                                    let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
-                                    if clicked_idx < options.len() {
-                                        dropdown_hover = Some(clicked_idx);
-                                    }
-                                }
+                                dropdown_hover = handle_select_hover(app, &focused_key, &focused_node, sx, sy, sw, sh);
                             }
                         }
                     } else if focused_node.tag_name() == Some("input") && focused_node.get_attribute("type") == Some("date") {
-                        if app.form.is_date_picker_open(focused_key) {
+                        if app.form.is_date_picker_open(&focused_key) {
                             if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
                                 if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
                                     let input_height = lr.size.height;
-                                    let dw = 220.0f32;
-                                    let dh_total = 210.0f32;
+                                    let cal_style = crate::style::resolve_virtual_style(app.stylesheet.as_ref(), "calendar-picker");
+                                    let dw = match cal_style.width {
+                                        crate::style::Length::Px(v) => v,
+                                        _ => 220.0,
+                                    };
+                                    let dh_total = match cal_style.height {
+                                        crate::style::Length::Px(v) => v,
+                                        _ => 210.0,
+                                    };
                                     if app.mouse_x >= sx && app.mouse_x < sx + dw && app.mouse_y >= sy + input_height && app.mouse_y < sy + input_height + dh_total {
                                         needs_redraw = true;
                                     }
@@ -1246,31 +1025,7 @@ pub(crate) fn handle_cursor_moved(app: &mut App, position: PhysicalPosition<f64>
                             if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
                                 let sw = lr.size.width;
                                 let sh = lr.size.height;
-                                
-                                let format = focused_node.get_attribute("format").unwrap_or("HH:mm");
-                                let cursor_pos = app.form.cursor(focused_key);
-                                let active_section = app.form.get_time_active_section(focused_key).unwrap_or_else(|| {
-                                    get_time_section_and_bounds(format, cursor_pos).0
-                                });
-                                
-                                let options = crate::render::date_dropdown::generate_time_options(active_section);
-                                
-                                let opt_h = 30.0;
-                                let input_style = app.styles.get(&dom::node_ptr(&focused_node)).cloned().unwrap_or_default();
-                                let max_dropdown_h = match input_style.max_height {
-                                    crate::style::Length::Px(v) => v,
-                                    _ => 7.0 * opt_h,
-                                };
-                                let total_h = options.len() as f32 * opt_h;
-                                let dropdown_h = total_h.min(max_dropdown_h);
-                                let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
-                                
-                                if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
-                                    let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
-                                    if clicked_idx < options.len() {
-                                        dropdown_hover = Some(clicked_idx);
-                                    }
-                                }
+                                dropdown_hover = handle_time_picker_hover(app, &focused_key, &focused_node, sx, sy, sw, sh);
                             }
                         }
                     }
@@ -1297,56 +1052,13 @@ pub(crate) fn handle_mouse_wheel(app: &mut App, delta: MouseScrollDelta) {
     if let Some(ref focused_key) = app.form.focused.clone() {
         if let Some(ref dom) = app.dom {
             if let Some(root) = dom.document_element() {
-                fn find_node(node: &std::rc::Rc<dom::Node>, target_key: &str) -> Option<std::rc::Rc<dom::Node>> {
-                    let key = format!("{:p}", dom::node_ptr(node));
-                    if key == target_key {
-                        return Some(node.clone());
-                    }
-                    for child in &node.children {
-                        if let Some(n) = find_node(child, target_key) {
-                            return Some(n);
-                        }
-                    }
-                    None
-                }
-                if let Some(focused_node) = find_node(&root, focused_key) {
+                if let Some(focused_node) = dom::Node::find_node_by_key(&root, focused_key) {
                     if focused_node.tag_name() == Some("select") {
                         if let Some((sx, sy)) = get_node_abs_pos(&root, dom::node_ptr(&focused_node), &app.layout, 0.0, -app.scroll_y) {
                             if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
                                 let sw = lr.size.width;
                                 let sh = lr.size.height;
-                                
-                                let mut options = Vec::new();
-                                for child in &focused_node.children {
-                                    if child.tag_name() == Some("option") {
-                                        options.push(child.clone());
-                                    }
-                                }
-                                
-                                let opt_h = 30.0;
-                                let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(&focused_node)) {
-                                    match style.max_height {
-                                        crate::style::Length::Px(v) => v,
-                                        _ => 7.0 * opt_h,
-                                    }
-                                } else {
-                                    7.0 * opt_h
-                                };
-                                let total_h = options.len() as f32 * opt_h;
-                                let dropdown_h = total_h.min(max_dropdown_h);
-                                
-                                if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
-                                    let scroll_y = app.form.get_dropdown_scroll_y(focused_key);
-                                    let dy = match delta {
-                                        MouseScrollDelta::LineDelta(_, y) => -y * 20.0,
-                                        MouseScrollDelta::PixelDelta(pos) => -pos.y as f32,
-                                    };
-                                    let max_scroll = (total_h - dropdown_h).max(0.0);
-                                    let new_scroll = (scroll_y + dy).clamp(0.0, max_scroll);
-                                    app.form.set_dropdown_scroll_y(focused_key, new_scroll);
-                                    scrolled_dropdown = true;
-                                    if let Some(w) = &app.window { w.request_redraw(); }
-                                }
+                                scrolled_dropdown = handle_select_scroll(app, focused_key, &focused_node, sx, sy, sw, sh, delta);
                             }
                         }
                     } else if focused_node.tag_name() == Some("input") && focused_node.get_attribute("type") == Some("date") {
@@ -1354,62 +1066,7 @@ pub(crate) fn handle_mouse_wheel(app: &mut App, delta: MouseScrollDelta) {
                             if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
                                 let sw = lr.size.width;
                                 let sh = lr.size.height;
-                                
-                                let format = focused_node.get_attribute("format").unwrap_or("dd/MM/yyyy");
-                                let cursor_pos = app.form.cursor(focused_key);
-                                let active_section = app.form.get_date_active_section(focused_key).unwrap_or_else(|| {
-                                    get_date_section_and_bounds(format, cursor_pos).0
-                                });
-                                
-                                let years_range = app.form.get_date_years_range(focused_key);
-                                let options = crate::render::date_dropdown::generate_date_options(active_section, years_range);
-                                
-                                let opt_h = 30.0;
-                                let input_style = app.styles.get(&dom::node_ptr(&focused_node)).cloned().unwrap_or_default();
-                                let max_dropdown_h = match input_style.max_height {
-                                    crate::style::Length::Px(v) => v,
-                                    _ => 7.0 * opt_h,
-                                };
-                                let total_h = options.len() as f32 * opt_h;
-                                let dropdown_h = total_h.min(max_dropdown_h);
-                                
-                                if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
-                                    let scroll_y = app.form.get_dropdown_scroll_y(focused_key);
-                                    let dy = match delta {
-                                        MouseScrollDelta::LineDelta(_, y) => -y * 20.0,
-                                        MouseScrollDelta::PixelDelta(pos) => -pos.y as f32,
-                                    };
-                                    
-                                    if active_section == DateSection::Year {
-                                        let (mut min_year, mut max_year) = years_range;
-                                        let mut new_scroll = scroll_y + dy;
-                                        
-                                        if new_scroll < 20.0 {
-                                            min_year -= 10;
-                                            app.form.set_date_years_range(focused_key, (min_year, max_year));
-                                            new_scroll += 10.0 * opt_h;
-                                        } else {
-                                            let total_h = ((max_year - min_year + 1) as f32) * opt_h;
-                                            let max_scroll = (total_h - dropdown_h).max(0.0);
-                                            if new_scroll > max_scroll - 20.0 {
-                                                max_year += 10;
-                                                app.form.set_date_years_range(focused_key, (min_year, max_year));
-                                            }
-                                        }
-                                        
-                                        let total_h = ((max_year - min_year + 1) as f32) * opt_h;
-                                        let max_scroll = (total_h - dropdown_h).max(0.0);
-                                        let clamped_scroll = new_scroll.clamp(0.0, max_scroll);
-                                        app.form.set_dropdown_scroll_y(focused_key, clamped_scroll);
-                                    } else {
-                                        let max_scroll = (total_h - dropdown_h).max(0.0);
-                                        let clamped_scroll = (scroll_y + dy).clamp(0.0, max_scroll);
-                                        app.form.set_dropdown_scroll_y(focused_key, clamped_scroll);
-                                    }
-                                    
-                                    scrolled_dropdown = true;
-                                    if let Some(w) = &app.window { w.request_redraw(); }
-                                }
+                                scrolled_dropdown = handle_date_picker_scroll(app, focused_key, &focused_node, sx, sy, sw, sh, delta);
                             }
                         }
                     } else if focused_node.tag_name() == Some("input") && focused_node.get_attribute("type") == Some("time") {
@@ -1417,38 +1074,7 @@ pub(crate) fn handle_mouse_wheel(app: &mut App, delta: MouseScrollDelta) {
                             if let Some(lr) = app.layout.get(dom::node_ptr(&focused_node)) {
                                 let sw = lr.size.width;
                                 let sh = lr.size.height;
-                                
-                                let format = focused_node.get_attribute("format").unwrap_or("HH:mm");
-                                let cursor_pos = app.form.cursor(focused_key);
-                                let active_section = app.form.get_time_active_section(focused_key).unwrap_or_else(|| {
-                                    get_time_section_and_bounds(format, cursor_pos).0
-                                });
-                                
-                                let options = crate::render::date_dropdown::generate_time_options(active_section);
-                                
-                                let opt_h = 30.0;
-                                let input_style = app.styles.get(&dom::node_ptr(&focused_node)).cloned().unwrap_or_default();
-                                let max_dropdown_h = match input_style.max_height {
-                                    crate::style::Length::Px(v) => v,
-                                    _ => 7.0 * opt_h,
-                                };
-                                let total_h = options.len() as f32 * opt_h;
-                                let dropdown_h = total_h.min(max_dropdown_h);
-                                
-                                if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
-                                    let scroll_y = app.form.get_dropdown_scroll_y(focused_key);
-                                    let dy = match delta {
-                                        MouseScrollDelta::LineDelta(_, y) => -y * 20.0,
-                                        MouseScrollDelta::PixelDelta(pos) => -pos.y as f32,
-                                    };
-                                    
-                                    let max_scroll = (total_h - dropdown_h).max(0.0);
-                                    let clamped_scroll = (scroll_y + dy).clamp(0.0, max_scroll);
-                                    app.form.set_dropdown_scroll_y(focused_key, clamped_scroll);
-                                    
-                                    scrolled_dropdown = true;
-                                    if let Some(w) = &app.window { w.request_redraw(); }
-                                }
+                                scrolled_dropdown = handle_time_picker_scroll(app, focused_key, &focused_node, sx, sy, sw, sh, delta);
                             }
                         }
                     }
@@ -1473,5 +1099,497 @@ pub(crate) fn handle_mouse_wheel(app: &mut App, delta: MouseScrollDelta) {
         app.update_cursor_icon();
         app.update_hover();
         if let Some(w) = &app.window { w.request_redraw(); }
+    }
+}
+
+
+fn handle_select_click(
+    app: &mut App,
+    focused_key: &str,
+    focused_node: &std::rc::Rc<dom::Node>,
+    sx: f32,
+    sy: f32,
+    sw: f32,
+    sh: f32,
+) -> bool {
+    let mut options = Vec::new();
+    for child in &focused_node.children {
+        if child.tag_name() == Some("option") {
+            options.push(child.clone());
+        }
+    }
+    
+    let opt_style = crate::style::resolve_virtual_style(app.stylesheet.as_ref(), "option");
+    let opt_h = match opt_style.height {
+        crate::style::Length::Px(v) => v,
+        _ => 30.0,
+    };
+    let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(focused_node)) {
+        match style.max_height {
+            crate::style::Length::Px(v) => v,
+            _ => 7.0 * opt_h,
+        }
+    } else {
+        7.0 * opt_h
+    };
+    let total_h = options.len() as f32 * opt_h;
+    let dropdown_h = total_h.min(max_dropdown_h);
+    let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
+    
+    if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+        let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
+        if clicked_idx < options.len() {
+            let selected_option = &options[clicked_idx];
+            let option_text = selected_option.children_text().trim().to_string();
+            app.form.set_value(focused_key, option_text);
+            
+            for opt in &options {
+                let opt_key = format!("{:p}", dom::node_ptr(opt));
+                app.form.checked.insert(opt_key, false);
+            }
+            let selected_opt_key = format!("{:p}", dom::node_ptr(selected_option));
+            app.form.checked.insert(selected_opt_key, true);
+        }
+        app.focus_node(None);
+        if let Some(w) = &app.window { w.request_redraw(); }
+        true
+    } else {
+        false
+    }
+}
+
+fn handle_date_picker_click(
+    app: &mut App,
+    focused_key: &str,
+    focused_node: &std::rc::Rc<dom::Node>,
+    sx: f32,
+    sy: f32,
+) -> bool {
+    if let Some(lr) = app.layout.get(dom::node_ptr(focused_node)) {
+        let input_height = lr.size.height;
+        let cal_style = crate::style::resolve_virtual_style(app.stylesheet.as_ref(), "calendar-picker");
+        let dw = match cal_style.width {
+            crate::style::Length::Px(v) => v,
+            _ => 220.0,
+        };
+        let dh_total = match cal_style.height {
+            crate::style::Length::Px(v) => v,
+            _ => 210.0,
+        };
+        
+        if app.mouse_x >= sx && app.mouse_x < sx + dw && app.mouse_y >= sy + input_height && app.mouse_y < sy + input_height + dh_total {
+            let my = app.mouse_y - (sy + input_height);
+            let mx = app.mouse_x - sx;
+            
+            let (mut m, mut y) = app.form.get_date_picker_month_year(focused_key);
+            
+            if my < 35.0 {
+                // Click in header
+                if mx < 35.0 {
+                    // Clicked "<"
+                    if m == 1 {
+                        m = 12;
+                        y -= 1;
+                    } else {
+                        m -= 1;
+                    }
+                    app.form.set_date_picker_month_year(focused_key, m, y);
+                } else if mx >= dw - 35.0 {
+                    // Clicked ">"
+                    if m == 12 {
+                        m = 1;
+                        y += 1;
+                    } else {
+                        m += 1;
+                    }
+                    app.form.set_date_picker_month_year(focused_key, m, y);
+                }
+            } else if my >= 60.0 {
+                // Click in days grid
+                let grid_y = my - 60.0;
+                let col = (mx / (dw / 7.0)) as u32;
+                let row_h = (dh_total - 60.0) / 6.0;
+                let row = (grid_y / row_h) as u32;
+                
+                let first_dow = crate::form::day_of_week(y, m, 1);
+                let total_days = crate::form::days_in_month(y, m);
+                
+                let idx = row * 7 + col;
+                if idx >= first_dow && idx < first_dow + total_days {
+                    let day = idx - first_dow + 1;
+                    let format = focused_node.get_attribute("format").unwrap_or("dd/MM/yyyy");
+                    
+                    let new_val = if format.to_lowercase() == "yyyy-mm-dd" {
+                        format!("{:04}-{:02}-{:02}", y, m, day)
+                    } else {
+                        format!("{:02}/{:02}/{:04}", day, m, y)
+                    };
+                    
+                    app.form.set_value(focused_key, new_val);
+                    app.form.set_date_picker_open(focused_key, false);
+                    
+                    app.form.set_cursor(focused_key, 10);
+                    app.form.clear_selection(focused_key);
+                }
+            }
+            if let Some(w) = &app.window { w.request_redraw(); }
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+
+fn handle_time_picker_click(
+    app: &mut App,
+    focused_key: &str,
+    focused_node: &std::rc::Rc<dom::Node>,
+    sx: f32,
+    sy: f32,
+    sw: f32,
+    sh: f32,
+) -> bool {
+    let format = focused_node.get_attribute("format").unwrap_or("HH:mm");
+    let cursor_pos = app.form.cursor(focused_key);
+    let active_section = app.form.get_time_active_section(focused_key).unwrap_or_else(|| {
+        get_time_section_and_bounds(format, cursor_pos).0
+    });
+    
+    let options = crate::render::date_dropdown::generate_time_options(active_section);
+    
+    let opt_style = crate::style::resolve_virtual_style(app.stylesheet.as_ref(), "option");
+    let opt_h = match opt_style.height {
+        crate::style::Length::Px(v) => v,
+        _ => 30.0,
+    };
+    let input_style = app.styles.get(&dom::node_ptr(focused_node)).cloned().unwrap_or_default();
+    let max_dropdown_h = match input_style.max_height {
+        crate::style::Length::Px(v) => v,
+        _ => {
+            let time_style = crate::style::resolve_virtual_style(app.stylesheet.as_ref(), "time-picker");
+            match time_style.max_height {
+                crate::style::Length::Px(v) => v,
+                _ => 7.0 * opt_h,
+            }
+        }
+    };
+    let total_h = options.len() as f32 * opt_h;
+    let dropdown_h = total_h.min(max_dropdown_h);
+    let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
+    
+    if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+        let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
+        if clicked_idx < options.len() {
+            let selected_val = &options[clicked_idx];
+            let current_val = app.form.get_value(focused_key).to_string();
+            let initial_val = if current_val.is_empty() { format.to_string() } else { current_val };
+            let updated_val = update_time_value_section(&initial_val, format, active_section, selected_val);
+            app.form.set_value(focused_key, updated_val);
+            
+            // Move cursor and update active section
+            let format_lower = format.to_lowercase();
+            if format_lower == "hh:mm:ss" {
+                match active_section {
+                    TimeSection::Hour => {
+                        app.form.set_cursor(focused_key, 3);
+                        app.form.set_time_active_section(focused_key, TimeSection::Minute);
+                        app.form.set_dropdown_scroll_y(focused_key, 0.0);
+                    }
+                    TimeSection::Minute => {
+                        app.form.set_cursor(focused_key, 6);
+                        app.form.set_time_active_section(focused_key, TimeSection::Second);
+                        app.form.set_dropdown_scroll_y(focused_key, 0.0);
+                    }
+                    TimeSection::Second => {
+                        app.form.set_cursor(focused_key, 8);
+                        app.focus_node(None);
+                    }
+                }
+            } else {
+                match active_section {
+                    TimeSection::Hour => {
+                        app.form.set_cursor(focused_key, 3);
+                        app.form.set_time_active_section(focused_key, TimeSection::Minute);
+                        app.form.set_dropdown_scroll_y(focused_key, 0.0);
+                    }
+                    TimeSection::Minute => {
+                        app.form.set_cursor(focused_key, 5);
+                        app.focus_node(None);
+                    }
+                    TimeSection::Second => {}
+                }
+            }
+        }
+        if let Some(w) = &app.window { w.request_redraw(); }
+        true
+    } else {
+        false
+    }
+}
+
+fn handle_select_hover(
+    app: &mut App,
+    focused_key: &str,
+    focused_node: &std::rc::Rc<dom::Node>,
+    sx: f32,
+    sy: f32,
+    sw: f32,
+    sh: f32,
+) -> Option<usize> {
+    let mut options = Vec::new();
+    for child in &focused_node.children {
+        if child.tag_name() == Some("option") {
+            options.push(child.clone());
+        }
+    }
+    
+    let opt_style = crate::style::resolve_virtual_style(app.stylesheet.as_ref(), "option");
+    let opt_h = match opt_style.height {
+        crate::style::Length::Px(v) => v,
+        _ => 30.0,
+    };
+    let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(focused_node)) {
+        match style.max_height {
+            crate::style::Length::Px(v) => v,
+            _ => 7.0 * opt_h,
+        }
+    } else {
+        7.0 * opt_h
+    };
+    let total_h = options.len() as f32 * opt_h;
+    let dropdown_h = total_h.min(max_dropdown_h);
+    let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
+    
+    if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+        let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
+        if clicked_idx < options.len() {
+            return Some(clicked_idx);
+        }
+    }
+    None
+}
+
+fn handle_time_picker_hover(
+    app: &mut App,
+    focused_key: &str,
+    focused_node: &std::rc::Rc<dom::Node>,
+    sx: f32,
+    sy: f32,
+    sw: f32,
+    sh: f32,
+) -> Option<usize> {
+    let format = focused_node.get_attribute("format").unwrap_or("HH:mm");
+    let cursor_pos = app.form.cursor(focused_key);
+    let active_section = app.form.get_time_active_section(focused_key).unwrap_or_else(|| {
+        get_time_section_and_bounds(format, cursor_pos).0
+    });
+    
+    let options = crate::render::date_dropdown::generate_time_options(active_section);
+    
+    let opt_style = crate::style::resolve_virtual_style(app.stylesheet.as_ref(), "option");
+    let opt_h = match opt_style.height {
+        crate::style::Length::Px(v) => v,
+        _ => 30.0,
+    };
+    let input_style = app.styles.get(&dom::node_ptr(focused_node)).cloned().unwrap_or_default();
+    let max_dropdown_h = match input_style.max_height {
+        crate::style::Length::Px(v) => v,
+        _ => {
+            let time_style = crate::style::resolve_virtual_style(app.stylesheet.as_ref(), "time-picker");
+            match time_style.max_height {
+                crate::style::Length::Px(v) => v,
+                _ => 7.0 * opt_h,
+            }
+        }
+    };
+    let total_h = options.len() as f32 * opt_h;
+    let dropdown_h = total_h.min(max_dropdown_h);
+    let dropdown_scroll = app.form.get_dropdown_scroll_y(focused_key);
+    
+    if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+        let clicked_idx = ((app.mouse_y + dropdown_scroll - (sy + sh)) / opt_h) as usize;
+        if clicked_idx < options.len() {
+            return Some(clicked_idx);
+        }
+    }
+    None
+}
+
+fn handle_select_scroll(
+    app: &mut App,
+    focused_key: &str,
+    focused_node: &std::rc::Rc<dom::Node>,
+    sx: f32,
+    sy: f32,
+    sw: f32,
+    sh: f32,
+    delta: MouseScrollDelta,
+) -> bool {
+    let mut options = Vec::new();
+    for child in &focused_node.children {
+        if child.tag_name() == Some("option") {
+            options.push(child.clone());
+        }
+    }
+    
+    let opt_style = crate::style::resolve_virtual_style(app.stylesheet.as_ref(), "option");
+    let opt_h = match opt_style.height {
+        crate::style::Length::Px(v) => v,
+        _ => 30.0,
+    };
+    let max_dropdown_h = if let Some(style) = app.styles.get(&dom::node_ptr(focused_node)) {
+        match style.max_height {
+            crate::style::Length::Px(v) => v,
+            _ => 7.0 * opt_h,
+        }
+    } else {
+        7.0 * opt_h
+    };
+    let total_h = options.len() as f32 * opt_h;
+    let dropdown_h = total_h.min(max_dropdown_h);
+    
+    if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+        let scroll_y = app.form.get_dropdown_scroll_y(focused_key);
+        let dy = match delta {
+            MouseScrollDelta::LineDelta(_, y) => -y * 20.0,
+            MouseScrollDelta::PixelDelta(pos) => -pos.y as f32,
+        };
+        let max_scroll = (total_h - dropdown_h).max(0.0);
+        let new_scroll = (scroll_y + dy).clamp(0.0, max_scroll);
+        app.form.set_dropdown_scroll_y(focused_key, new_scroll);
+        if let Some(w) = &app.window { w.request_redraw(); }
+        true
+    } else {
+        false
+    }
+}
+
+fn handle_date_picker_scroll(
+    app: &mut App,
+    focused_key: &str,
+    focused_node: &std::rc::Rc<dom::Node>,
+    sx: f32,
+    sy: f32,
+    sw: f32,
+    sh: f32,
+    delta: MouseScrollDelta,
+) -> bool {
+    let format = focused_node.get_attribute("format").unwrap_or("dd/MM/yyyy");
+    let cursor_pos = app.form.cursor(focused_key);
+    let active_section = app.form.get_date_active_section(focused_key).unwrap_or_else(|| {
+        get_date_section_and_bounds(format, cursor_pos).0
+    });
+    
+    let years_range = app.form.get_date_years_range(focused_key);
+    let options = crate::render::date_dropdown::generate_date_options(active_section, years_range);
+    
+    let opt_style = crate::style::resolve_virtual_style(app.stylesheet.as_ref(), "option");
+    let opt_h = match opt_style.height {
+        crate::style::Length::Px(v) => v,
+        _ => 30.0,
+    };
+    let input_style = app.styles.get(&dom::node_ptr(focused_node)).cloned().unwrap_or_default();
+    let max_dropdown_h = match input_style.max_height {
+        crate::style::Length::Px(v) => v,
+        _ => 7.0 * opt_h,
+    };
+    let total_h = options.len() as f32 * opt_h;
+    let dropdown_h = total_h.min(max_dropdown_h);
+    
+    if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+        let scroll_y = app.form.get_dropdown_scroll_y(focused_key);
+        let dy = match delta {
+            MouseScrollDelta::LineDelta(_, y) => -y * 20.0,
+            MouseScrollDelta::PixelDelta(pos) => -pos.y as f32,
+        };
+        
+        if active_section == DateSection::Year {
+            let (mut min_year, mut max_year) = years_range;
+            let mut new_scroll = scroll_y + dy;
+            
+            if new_scroll < 20.0 {
+                min_year -= 10;
+                app.form.set_date_years_range(focused_key, (min_year, max_year));
+                new_scroll += 10.0 * opt_h;
+            } else {
+                let total_h = ((max_year - min_year + 1) as f32) * opt_h;
+                let max_scroll = (total_h - dropdown_h).max(0.0);
+                if new_scroll > max_scroll - 20.0 {
+                    max_year += 10;
+                    app.form.set_date_years_range(focused_key, (min_year, max_year));
+                }
+            }
+            
+            let total_h = ((max_year - min_year + 1) as f32) * opt_h;
+            let max_scroll = (total_h - dropdown_h).max(0.0);
+            let clamped_scroll = new_scroll.clamp(0.0, max_scroll);
+            app.form.set_dropdown_scroll_y(focused_key, clamped_scroll);
+        } else {
+            let max_scroll = (total_h - dropdown_h).max(0.0);
+            let clamped_scroll = (scroll_y + dy).clamp(0.0, max_scroll);
+            app.form.set_dropdown_scroll_y(focused_key, clamped_scroll);
+        }
+        
+        if let Some(w) = &app.window { w.request_redraw(); }
+        true
+    } else {
+        false
+    }
+}
+
+fn handle_time_picker_scroll(
+    app: &mut App,
+    focused_key: &str,
+    focused_node: &std::rc::Rc<dom::Node>,
+    sx: f32,
+    sy: f32,
+    sw: f32,
+    sh: f32,
+    delta: MouseScrollDelta,
+) -> bool {
+    let format = focused_node.get_attribute("format").unwrap_or("HH:mm");
+    let cursor_pos = app.form.cursor(focused_key);
+    let active_section = app.form.get_time_active_section(focused_key).unwrap_or_else(|| {
+        get_time_section_and_bounds(format, cursor_pos).0
+    });
+    
+    let options = crate::render::date_dropdown::generate_time_options(active_section);
+    
+    let opt_style = crate::style::resolve_virtual_style(app.stylesheet.as_ref(), "option");
+    let opt_h = match opt_style.height {
+        crate::style::Length::Px(v) => v,
+        _ => 30.0,
+    };
+    let input_style = app.styles.get(&dom::node_ptr(focused_node)).cloned().unwrap_or_default();
+    let max_dropdown_h = match input_style.max_height {
+        crate::style::Length::Px(v) => v,
+        _ => {
+            let time_style = crate::style::resolve_virtual_style(app.stylesheet.as_ref(), "time-picker");
+            match time_style.max_height {
+                crate::style::Length::Px(v) => v,
+                _ => 7.0 * opt_h,
+            }
+        }
+    };
+    let total_h = options.len() as f32 * opt_h;
+    let dropdown_h = total_h.min(max_dropdown_h);
+    
+    if app.mouse_x >= sx && app.mouse_x < sx + sw && app.mouse_y >= sy + sh && app.mouse_y < sy + sh + dropdown_h {
+        let scroll_y = app.form.get_dropdown_scroll_y(focused_key);
+        let dy = match delta {
+            MouseScrollDelta::LineDelta(_, y) => -y * 20.0,
+            MouseScrollDelta::PixelDelta(pos) => -pos.y as f32,
+        };
+        
+        let max_scroll = (total_h - dropdown_h).max(0.0);
+        let clamped_scroll = (scroll_y + dy).clamp(0.0, max_scroll);
+        app.form.set_dropdown_scroll_y(focused_key, clamped_scroll);
+        
+        if let Some(w) = &app.window { w.request_redraw(); }
+        true
+    } else {
+        false
     }
 }
